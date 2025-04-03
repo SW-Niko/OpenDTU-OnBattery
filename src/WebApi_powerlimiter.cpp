@@ -12,6 +12,7 @@
 #include "helper.h"
 #include "WebApi_errors.h"
 #include "Configuration.h"
+#include "BatteryGuard.h"
 
 void WebApiPowerLimiterClass::init(AsyncWebServer& server, Scheduler& scheduler)
 {
@@ -110,6 +111,7 @@ void WebApiPowerLimiterClass::onAdminPost(AsyncWebServerRequest* request)
     request->send(response);
 
     PowerLimiter.triggerReloadingConfig();
+    BatteryGuard.updateSettings(BatteryGuardClass::UpdateSource::DPL);
 
     // potentially make thresholds auto-discoverable
     MqttHandlePowerLimiterHass.forceUpdate();

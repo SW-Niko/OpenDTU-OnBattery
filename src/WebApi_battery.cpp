@@ -12,6 +12,7 @@
 #include "WebApi_battery.h"
 #include "WebApi_errors.h"
 #include "helper.h"
+#include "BatteryGuard.h"
 
 void WebApiBatteryClass::init(AsyncWebServer& server, Scheduler& scheduler)
 {
@@ -92,6 +93,7 @@ void WebApiBatteryClass::onAdminPost(AsyncWebServerRequest* request)
     WebApi.sendJsonResponse(request, response, __FUNCTION__, __LINE__);
 
     Battery.updateSettings();
+    BatteryGuard.updateSettings(BatteryGuardClass::UpdateSource::BATTERY);
 
     // potentially make SoC thresholds auto-discoverable
     MqttHandlePowerLimiterHass.forceUpdate();

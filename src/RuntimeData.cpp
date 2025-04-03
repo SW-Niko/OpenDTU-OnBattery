@@ -22,6 +22,7 @@
 #include <LittleFS.h>
 #include <LogHelper.h>
 #include <battery/Controller.h>
+#include "BatteryGuard.h"
 #include "RuntimeData.h"
 #include "PowerLimiter.h"
 
@@ -113,7 +114,7 @@ bool RuntimeClass::write(uint16_t const freezeMinutes)
         // ensure any additional shared data added here remains under the existing mutex protection
         Battery.serializeRTD(doc["battery"].to<JsonObject>());
         PowerLimiter.serializeRTD(doc["power_limiter"].to<JsonObject>());
-
+        BatteryGuard.serializeRTD(doc["battery_guard"].to<JsonObject>());
 
         if (!Utils::checkJsonAlloc(doc, __FUNCTION__, __LINE__)) {
             return cleanExit(false, "JSON alloc fault, skipping write");
@@ -173,6 +174,7 @@ bool RuntimeClass::read(ReadMode const mode)
     if (mode == ReadMode::START_UP) {
         Battery.deserializeRTD(doc["battery"]);
         PowerLimiter.deserializeRTD(doc["power_limiter"]);
+        BatteryGuard.deserializeRTD(doc["battery_guard"]);
     } else {
         ;
     }
