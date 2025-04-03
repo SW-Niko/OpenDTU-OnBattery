@@ -10,6 +10,7 @@
 #include <memory>
 #include <functional>
 #include <optional>
+#include <mutex>
 #include <TaskSchedulerDeclarations.h>
 #include <frozen/string.h>
 #include "RuntimeData.h"
@@ -63,6 +64,9 @@ public:
     void serializeRT(JsonObject obj) const override;
     void deserializeRT(JsonObject obj) override;
 
+    // used to get the ATF power for a specific inverter
+    std::optional<uint16_t> getATFInverterPower(uint64_t inverterSerial, float limit) const;
+
 private:
     void loop();
 
@@ -77,6 +81,7 @@ private:
     uint32_t _calculationBackoffMs = _calculationBackoffMsDefault;
     Mode _mode = Mode::Normal;
 
+    mutable std::mutex _dplMutex;
     std::deque<std::unique_ptr<PowerLimiterInverter>> _inverters;
     std::deque<std::unique_ptr<PowerLimiterInverter>> _retirees;
 
@@ -94,6 +99,9 @@ private:
 
     uint32_t _lastPowerMeterUpdate = 0; // timestamp of last power meter update
     uint16_t _lastConsumptionPower = 0; // last calculated consumption power
+
+    bool _initATFDone = false;   // flag to check if all ATF data has been initialized
+    uint32_t _lastATFReport = 0; // timestamp of last ATF report
 
     frozen::string const& getStatusText(Status status) const;
     void announceStatus(Status status);
@@ -125,6 +133,9 @@ private:
     float getPriorityVoltageStopThreshold(void) const;
 
     bool isConsumptionPowerChangeSufficient();
+
+    bool initATFAll(void);
+    void updateATFAllData(void);
 };
 
 extern PowerLimiterClass PowerLimiter;

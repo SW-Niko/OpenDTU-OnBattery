@@ -192,7 +192,12 @@ bool PowerLimiterInverter::update()
             return true;
         }
 
-        float newRelativeLimit = static_cast<float>(*_oTargetPowerLimitWatts * 100) / getInverterMaxPowerWatts();
+        float newRelativeLimit = 0.0f;
+        if (isATFActive()) {
+            newRelativeLimit = getATFLimit(*_oTargetPowerLimitWatts); // ATF
+        } else {
+            newRelativeLimit = static_cast<float>(*_oTargetPowerLimitWatts * 100) / getInverterMaxPowerWatts(); // linear
+        }
 
         // if no limit command is pending, the SystemConfigPara does report the
         // current limit, as the answer by the inverter to a limit command is
@@ -204,12 +209,12 @@ bool PowerLimiterInverter::update()
         // update cycle, we should assume *our* requested limit was set.
         uint32_t lastLimitCommandMillis = _spInverter->SystemConfigPara()->getLastUpdateCommand();
         if ((lastLimitCommandMillis - *_oUpdateStartMillis) < halfOfAllMillis) {
-            DTU_LOGD("limit update %s, actual limit is %.1f %% (%.0f W "
+            DTU_LOGD("limit update %s, actual limit is %.1f %% (%d W "
                     "respectively), effective %d ms after update started, "
                     "requested were %.1f %%",
                     (CMD_OK == lastLimitCommandState)?"succeeded":"FAILED",
                     currentRelativeLimit,
-                    (currentRelativeLimit * getInverterMaxPowerWatts() / 100),
+                    getCurrentLimitWatts(),
                     (lastLimitCommandMillis - *_oUpdateStartMillis),
                     newRelativeLimit);
 
@@ -233,8 +238,8 @@ bool PowerLimiterInverter::update()
             return false;
         }
 
-        DTU_LOGI("sending limit of %.1f %% (%.0f W respectively), max output is %d W",
-                newRelativeLimit, (newRelativeLimit * getInverterMaxPowerWatts() / 100),
+        DTU_LOGI("sending limit of %.1f %% (%d W respectively), max output is %d W",
+                newRelativeLimit, *_oTargetPowerLimitWatts,
                 getInverterMaxPowerWatts());
 
         _spInverter->sendActivePowerControlRequest(newRelativeLimit,
@@ -347,7 +352,12 @@ float PowerLimiterInverter::getDcVoltage(uint8_t input)
 uint16_t PowerLimiterInverter::getCurrentLimitWatts() const
 {
     auto currentLimitPercent = _spInverter->SystemConfigPara()->getLimitPercent();
-    return static_cast<uint16_t>(currentLimitPercent * getInverterMaxPowerWatts() / 100);
+
+    if (isATFActive()) {
+        return getATFPower(currentLimitPercent); // ATF
+    } else {
+        return static_cast<uint16_t>(currentLimitPercent * getInverterMaxPowerWatts() / 100); // linear
+    }
 }
 
 void PowerLimiterInverter::debug() const
@@ -445,5 +455,20 @@ char PowerLimiterInverter::mpptName(MpptNum_t mppt)
 
         default:
             return '?';
+    }
+}
+
+/*
+ * Update the ATF data with the current power, limit, and timestamp.
+ */
+void PowerLimiterInverter::updateATFData(void) {
+
+    auto power = _spInverter->Statistics()->getChannelFieldValue(TYPE_AC, CH0, FLD_PAC);
+    auto time = _spInverter->Statistics()->getLastUpdate();
+    auto limit = _spInverter->SystemConfigPara()->getLimitPercent();
+
+    // Warning: Short after power up this values might not be accurate
+    if ((millis() - time) < (30 * 1000)) {
+        setATFData(power, limit, time);
     }
 }
