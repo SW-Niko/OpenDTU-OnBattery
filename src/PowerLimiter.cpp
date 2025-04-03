@@ -104,6 +104,10 @@ void PowerLimiterClass::announceStatus(PowerLimiterClass::Status status)
 
 void PowerLimiterClass::reloadConfig()
 {
+    // lock the inverters deque to safely access the inverters
+    // because the web-UI may access the inverters deque, we use a mutex to protect it
+    std::lock_guard<std::mutex> lock(_dplMutex);
+
     auto const& config = Configuration.get();
 
     if (!config.PowerLimiter.Enabled || Mode::Disabled == _mode) {
@@ -132,6 +136,10 @@ void PowerLimiterClass::reloadConfig()
 
         if (!stillGoverned) {
             _retirees.push_back(std::move(*iter));
+        } else {
+            // if the inverter uses ATF, move the data to the temporary cache before removing the inverter instance
+            // the cached ATF data will be reused later if needed
+            if ((*iter)->isATFActive()) { (*iter)->moveATFDataToCache(); }
         }
 
         iter = _inverters.erase(iter);
@@ -150,6 +158,7 @@ void PowerLimiterClass::reloadConfig()
 
     calcNextInverterRestart();
 
+    _initATFDone = initATFAll(); // check if ATF must be initialized
     _reloadConfigFlag = false;
 }
 
@@ -209,6 +218,9 @@ void PowerLimiterClass::loop()
 
         latestInverterStats = std::max(*oStatsMillis, latestInverterStats);
     }
+
+    // we do this here because we need inverter max power info to initialize the ATF data
+    if (!_initATFDone) { _initATFDone = initATFAll(); }
 
     // note that we can only perform unconditional full solar-passthrough or any
     // calculation at all after surviving the loop above, which ensures that we
@@ -432,6 +444,8 @@ void PowerLimiterClass::loop()
             config.PowerLimiter.TotalUpperPowerLimit,
             config.PowerLimiter.ConductionLosses);
     }
+
+    updateATFAllData();
 
     uint16_t inverterTotalPower = calcTargetOutput();
 
@@ -1193,4 +1207,87 @@ void PowerLimiterClass::deserializeRT(JsonObject obj)
     if (obj[ONE_STOP_PER_NIGHT_DONE].is<bool>()) {
         _oneStopPerNightDoneRT = obj[ONE_STOP_PER_NIGHT_DONE];
     }
+}
+
+/*
+ * Initialize the instances of all ATF configured inverters
+ * We use late initialization, because we need the power limiter inverter instance
+ * and the maximum inverter power to initialize the ATF correctly.
+ */
+bool PowerLimiterClass::initATFAll(void) {
+    bool allDone = true;
+    uint16_t counter = 0;
+    for (auto const& upInv : _inverters) {
+        if (!upInv->isBatteryPowered()) { continue; }                   // ATF only for battery-powered inverters
+        if (counter >= upInv->getATFMaxSupportedInverter()) { break; }  // limit to the maximum supported inverters
+
+        // skip if ATF is already initialized and active
+        if (upInv->isATFActive()) {
+            ++counter;
+            continue;
+        }
+
+        // init ATF if it is enabled and not already active
+        if (upInv->isATFEnabled() && !upInv->isATFActive()) {
+
+            auto maxPower = upInv->getInverterMaxPowerWatts();
+            //if (maxPower == 0) { maxPower = 300; DTU_LOGW("ATF TESTMODE with fixed 300W"); } // todo: delete after testing
+
+            if ((maxPower == 0) || (!upInv->initATF(maxPower, upInv->getSerial()))){
+                allDone = false;
+                continue;
+            }
+            ++counter;
+        }
+    }
+
+    if (allDone) {
+        // all inverters have been processed, now we can free any unused ATF cache if necessary
+        auto iter = _inverters.begin();
+        if (iter != _inverters.end()) { (*iter)->freeATFCache(); }
+    }
+    return allDone;
+}
+
+/*
+ * Update the ATF data of all ATF configured inverters
+ * This function should be called periodically to keep the ATF data up-to-date
+ */
+void PowerLimiterClass::updateATFAllData(void) {
+
+    // check if it is time to print the ATF report
+    bool doReport = false;
+    if (millis() - _lastATFReport > 60 * 1000) {
+        doReport = true;
+        _lastATFReport = millis();
+    }
+
+    // update the ATF data with the current power and limit
+    for (auto& upInv : _inverters) {
+        if (upInv->isATFActive() && upInv->isReachable() && upInv->isProducing() &&
+                !upInv->hasPendingCommands()) {
+            upInv->updateATFData();
+        }
+        if (doReport) { upInv->printATFReport(); }
+    }
+}
+
+/*
+ * Get the ATF power for for a specific inverter
+ * Used to show the ATF calculated power at the web-UI
+ */
+std::optional<uint16_t> PowerLimiterClass::getATFInverterPower(uint64_t inverterSerial, float limit) const {
+
+    // lock the inverters deque to safely access the inverters
+    // because the web-UI may access the inverters deque, we use a mutex to protect it
+    std::lock_guard<std::mutex> lock(_dplMutex);
+
+    for (auto& upInv : _inverters) {
+        if (!upInv->isATFActive()) { continue; }
+        if (upInv->getSerial() != inverterSerial) { continue; }
+
+        // found matching inverter, get power for the given limit
+        return upInv->getATFPower(limit);
+    }
+    return std::nullopt;
 }
