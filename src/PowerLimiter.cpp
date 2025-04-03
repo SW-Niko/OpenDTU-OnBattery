@@ -18,6 +18,8 @@
 #include <frozen/map.h>
 #include "SunPosition.h"
 #include <LogHelper.h>
+#include "BatteryGuard.h"
+
 
 #undef TAG
 static const char* TAG = "dynamicPowerLimiter";
@@ -262,7 +264,8 @@ void PowerLimiterClass::loop()
 
         // check the stop condition
         auto day = SunPosition.isDayPeriod();
-        if (isStopThresholdReached()) {
+        auto resultBatteryGuard = BatteryGuard.isStopThresholdReached(_batteryState == BatteryState::STOP);
+        if (resultBatteryGuard.has_value() ? resultBatteryGuard.value() : isStopThresholdReached()) {
             _fromStart = false;
             _oneStopPerNightDone = day ? false : true;
             return BatteryState::STOP;
@@ -301,7 +304,9 @@ void PowerLimiterClass::loop()
 
     auto getFullSolarPassthrough = [this,&config]() -> bool {
         // we only do full solar PT if general solar PT is enabled
-        if (!isSolarPassThroughEnabled()) { return false; }
+        if ((!isSolarPassThroughEnabled())
+        || !isStartThresholdReached()
+        || !BatteryGuard.isUseOfExcessiveSolarPowerAllowed()) { return false; }
 
         if (testThreshold(config.PowerLimiter.FullSolarPassThroughSoc,
                         config.PowerLimiter.FullSolarPassThroughStartVoltage,
@@ -319,6 +324,11 @@ void PowerLimiterClass::loop()
     };
 
     auto getLoadCorrectedVoltage = [this,&config]() -> float {
+
+        // use "open circuit voltage" if available
+        auto oOpenCV = BatteryGuard.getOpenCircuitVoltage();
+        if (oOpenCV) { return oOpenCV.value(); }
+
         // TODO(schlimmchen): use the battery's data if available,
         // i.e., the current drawn from the battery as reported by the battery.
         float acPower = getBatteryInvertersOutputAcWatts();
@@ -353,13 +363,13 @@ void PowerLimiterClass::loop()
                 getBatteryInvertersOutputAcWatts(),
                 config.PowerLimiter.VoltageLoadCorrectionFactor);
 
-        DTU_LOGD("battery discharge %s, start %.2f V or %u %%, stop %.2f V or %u %%",
+        DTU_LOGD("battery discharge %s, start %.2f V or %.1f %%, stop %.2f V or %.1f %%",
                 (((_batteryState == BatteryState::DISCHARGE_ALLOWED) || (_batteryState == BatteryState::DISCHARGE_NIGHT))?"allowed":
                 (_batteryState == BatteryState::NO_DISCHARGE)?"restricted":"stopped"),
-                config.PowerLimiter.VoltageStartThreshold,
-                config.PowerLimiter.BatterySocStartThreshold,
-                config.PowerLimiter.VoltageStopThreshold,
-                config.PowerLimiter.BatterySocStopThreshold);
+                getPriorityVoltageStartThreshold(),
+                getPrioritySoCStartThreshold(),
+                getPriorityVoltageStopThreshold(),
+                getPrioritySoCStopThreshold());
 
         if (isSolarPassThroughEnabled()) {
             DTU_LOGD("full solar-passthrough %s, start %.2f V or %u %%, stop %.2f V",
@@ -391,7 +401,12 @@ void PowerLimiterClass::loop()
     auto coveredBySmartBuffer = updateInverterLimits(remainingAfterSolar, sSmartBufferPoweredFilter, sSmartBufferPoweredExpression);
     auto remainingAfterSmartBuffer = (remainingAfterSolar >= coveredBySmartBuffer) ? remainingAfterSolar - coveredBySmartBuffer : 0;
     auto powerBusUsage = calcPowerBusUsage(remainingAfterSmartBuffer);
-    auto coveredByBattery = updateInverterLimits(powerBusUsage, sBatteryPoweredFilter, sBatteryPoweredExpression);
+
+    // power limit from the 'Stop-Voltage Limiter' or 'Recharge Helper'
+    auto powerBatteryGuard = BatteryGuard.calculatePowerLimit(powerBusUsage, getBatteryInvertersOutputAcWatts(), latestInverterStats);
+    if (powerBatteryGuard < powerBusUsage) { DTU_LOGD("AC power limit by Battery Guard is %u W", powerBatteryGuard); }
+
+    auto coveredByBattery = updateInverterLimits(powerBatteryGuard, sBatteryPoweredFilter, sBatteryPoweredExpression);
 
     for (auto const &upInv : _inverters) { upInv->debug(); }
 
@@ -869,33 +884,27 @@ bool PowerLimiterClass::testThreshold(float socThreshold, float voltThreshold,
 
 bool PowerLimiterClass::isStartThresholdReached() const
 {
-    auto const& config = Configuration.get();
-
     return testThreshold(
-            config.PowerLimiter.BatterySocStartThreshold,
-            config.PowerLimiter.VoltageStartThreshold,
+            getPrioritySoCStartThreshold(),
+            getPriorityVoltageStartThreshold(),
             [](float a, float b) -> bool { return a >= b; }
     );
 }
 
 bool PowerLimiterClass::isStopThresholdReached() const
 {
-    auto const& config = Configuration.get();
-
     return testThreshold(
-            config.PowerLimiter.BatterySocStopThreshold,
-            config.PowerLimiter.VoltageStopThreshold,
+            getPrioritySoCStopThreshold(),
+            getPriorityVoltageStopThreshold(),
             [](float a, float b) -> bool { return a <= b; }
     );
 }
 
 bool PowerLimiterClass::isBelowStopThreshold() const
 {
-    auto const& config = Configuration.get();
-
     return testThreshold(
-            config.PowerLimiter.BatterySocStopThreshold,
-            config.PowerLimiter.VoltageStopThreshold,
+            getPrioritySoCStopThreshold(),
+            getPriorityVoltageStopThreshold(),
             [](float a, float b) -> bool { return a < b; }
     );
 }
@@ -991,4 +1000,24 @@ void PowerLimiterClass::deserializeRTD(JsonObject const& obj)
     // Note: Up to now the PowerLimiterClass does not use a mutex
     // Use of atomic<bool> would be an solution but I want to avoid the overhead
     _fromStart =  obj["battery_from_start"] | false;
+}
+
+float PowerLimiterClass::getPrioritySoCStartThreshold(void) const
+{
+    return BatteryGuard.getSoCStartThreshold().value_or(Configuration.get().PowerLimiter.BatterySocStartThreshold);
+}
+
+float PowerLimiterClass::getPrioritySoCStopThreshold(void) const
+{
+    return BatteryGuard.getSoCStopThreshold().value_or(Configuration.get().PowerLimiter.BatterySocStopThreshold);
+}
+
+float PowerLimiterClass::getPriorityVoltageStartThreshold(void) const
+{
+    return BatteryGuard.getVoltageStartThreshold().value_or(Configuration.get().PowerLimiter.VoltageStartThreshold);
+}
+
+float PowerLimiterClass::getPriorityVoltageStopThreshold(void) const
+{
+    return BatteryGuard.getVoltageStopThreshold().value_or(Configuration.get().PowerLimiter.VoltageStopThreshold);
 }

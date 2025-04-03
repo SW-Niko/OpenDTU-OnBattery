@@ -37,6 +37,7 @@
 #include <TaskScheduler.h>
 #include <esp_heap_caps.h>
 #include "RuntimeData.h"
+#include "BatteryGuard.h"
 
 #undef TAG
 static const char* TAG = "main";
@@ -152,11 +153,13 @@ void setup()
     PowerLimiter.init(scheduler);
     GridCharger.init(scheduler);
     Battery.init(scheduler);
+    BatteryGuard.init(scheduler);
     // ... and here (before RuntimeData)
 
     // Must be done after all other components have been initialized
     RuntimeData.init(scheduler);
     RuntimeData.read();
+
 
     ESP_LOGI(TAG, "Startup complete");
 }

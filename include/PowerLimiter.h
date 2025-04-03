@@ -109,6 +109,11 @@ private:
     bool isBelowStopThreshold() const;
     void calcNextInverterRestart();
     bool isSolarPassThroughEnabled() const;
+
+    float getPrioritySoCStartThreshold(void) const;
+    float getPrioritySoCStopThreshold(void) const;
+    float getPriorityVoltageStartThreshold(void) const;
+    float getPriorityVoltageStopThreshold(void) const;
 };
 
 extern PowerLimiterClass PowerLimiter;
