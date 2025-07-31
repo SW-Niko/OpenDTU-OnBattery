@@ -38,6 +38,7 @@
 #include <esp_heap_caps.h>
 #include "RuntimeData.h"
 #include "BatteryGuard.h"
+#include "SurplusPower.h"
 
 #undef TAG
 static const char* TAG = "main";
@@ -155,6 +156,7 @@ void setup()
     GridCharger.init(scheduler);
     Battery.init(scheduler);
     BatteryGuard.init(scheduler);
+    Surplus.init(scheduler);
     // ... and here (before RuntimeData)
 
     Runtime.read(); // Read runtime values from all components that are registered to read on startup
