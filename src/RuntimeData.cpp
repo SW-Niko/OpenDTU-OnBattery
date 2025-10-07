@@ -16,6 +16,7 @@
 #include <Utils.h>
 #include <LittleFS.h>
 #include <LogHelper.h>
+#include <battery/Controller.h>
 #include "RuntimeData.h"
 
 
@@ -91,7 +92,7 @@ bool RuntimeClass::write(void)
     } // mutex is automatically released when lock goes out of this scope
 
     // Insert additional runtime data here and protect the shared data with a local mutex
-
+    Battery.serializeRTD(doc["battery"].to<JsonObject>());
 
     if (!Utils::checkJsonAlloc(doc, __FUNCTION__, __LINE__)) {
         return cleanExit(false, "JSON alloc fault, skipping write");
@@ -137,7 +138,7 @@ bool RuntimeClass::read(void)
     } // mutex is automatically released when lock goes out of this scope
 
     // deserialize additional runtime data here, prepare default values and protect the shared data with a local mutex
-
+    Battery.deserializeRTD(doc["battery"]);
 
     if (fRuntime) { fRuntime.close(); }
     if (readOk) {
