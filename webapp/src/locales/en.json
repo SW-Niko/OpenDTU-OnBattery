@@ -1127,6 +1127,7 @@
         "Value": "Value",
         "Unit": "@:base.Unit",
         "SoC": "State of Charge",
+        "fullyChargedDays": "Days since fully charged",
         "stateOfHealth": "State of Health",
         "voltage": "Voltage",
         "current": "Current",

@@ -49,6 +49,15 @@ void Stats::getLiveViewData(JsonVariant& root) const
         addLiveViewValue(root, "SoC", _soc, "%", _socPrecision);
     }
 
+    if (_oSoCFullTime.has_value()) {
+        time_t nowTime;
+        Utils::getEpoch(&nowTime, 5);
+        auto days = static_cast<uint16_t>(difftime(nowTime, _oSoCFullTime.value()) / (60.0 * 60.0 * 24.0));
+        addLiveViewValue(root, "fullyChargedDays", days, "days", 0);
+    } else {
+        addLiveViewValue(root, "fullyChargedDays", -1, "days", 0);
+    }
+
     if (isVoltageValid()) {
         addLiveViewValue(root, "voltage", _voltage, "V", 2);
     }
