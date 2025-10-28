@@ -21,6 +21,7 @@
 #include <Utils.h>
 #include <LittleFS.h>
 #include <LogHelper.h>
+#include <battery/Controller.h>
 #include "RuntimeData.h"
 
 
@@ -109,7 +110,7 @@ bool RuntimeClass::write(uint16_t const freezeMinutes)
         info["save_epoch"] = nextEpoch;
 
         // ensure any additional shared data added here remains under the existing mutex protection
-
+        Battery.serializeRTD(doc["battery"].to<JsonObject>());
 
         if (!Utils::checkJsonAlloc(doc, __FUNCTION__, __LINE__)) {
             return cleanExit(false, "JSON alloc fault, skipping write");
@@ -167,11 +168,10 @@ bool RuntimeClass::read(ReadMode const mode)
     // deserialize additional runtime data here, prepare default values and protect the shared data with a mutex
     // use ReadMode::START_UP for all data that can be initialized during startup
     if (mode == ReadMode::START_UP) {
-        ;
+        Battery.deserializeRTD(doc["battery"]);
     } else {
         ;
     }
-
 
     if (fRuntime) { fRuntime.close(); }
     if (readOk) {
