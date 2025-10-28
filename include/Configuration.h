@@ -318,6 +318,25 @@ struct SOLAR_CHARGER_CONFIG_T {
 };
 using SolarChargerConfig = struct SOLAR_CHARGER_CONFIG_T;
 
+struct BATTERY_GUARD_CONFIG_T {
+    bool Enabled;
+    float InternalResistance;
+    bool VoltageDropCompensationEnabled;
+    bool LowVoltageLimiterEnabled;
+    bool RechargeHelperEnabled;
+    bool ExcessiveSolarPowerDisabled;
+    uint8_t DurationIdle;
+    uint8_t DurationStage1;
+    uint8_t DurationStage2;
+    bool UseVoltageThresholds;
+    float MaxVoltageStartThreshold;
+    float MaxVoltageStopThreshold;
+    uint16_t MaxSoCStartThreshold;
+    uint16_t MaxSoCStopThreshold;
+    uint16_t UpperPowerLimit;
+};
+using BatteryGuardConfig = struct BATTERY_GUARD_CONFIG_T;
+
 struct CONFIG_T {
     struct {
         uint32_t Version;
@@ -445,6 +464,8 @@ struct CONFIG_T {
 
     GridChargerConfig GridCharger;
 
+    BatteryGuardConfig BatteryGuard;
+
     INVERTER_CONFIG_T Inverter[INV_MAX_COUNT];
     char Dev_PinMapping[DEV_MAX_MAPPING_NAME_STRLEN + 1];
 
@@ -501,6 +522,7 @@ public:
     static void serializeGridChargerCanConfig(GridChargerCanConfig const& source, JsonObject& target);
     static void serializeGridChargerHuaweiConfig(GridChargerHuaweiConfig const& source, JsonObject& target);
     static void serializeGridChargerTruckiConfig(GridChargerTruckiConfig const& source, JsonObject& target);
+    static void serializeBatteryGuardConfig(BatteryGuardConfig const& source, PowerLimiterConfig const& sourceP, JsonObject& target);
 
     static void deserializeHttpRequestConfig(JsonObject const& source_http_config, HttpRequestConfig& target);
     static void deserializeSolarChargerConfig(JsonObject const& source, SolarChargerConfig& target);
@@ -519,6 +541,7 @@ public:
     static void deserializeGridChargerCanConfig(JsonObject const& source, GridChargerCanConfig& target);
     static void deserializeGridChargerHuaweiConfig(JsonObject const& source, GridChargerHuaweiConfig& target);
     static void deserializeGridChargerTruckiConfig(JsonObject const& source, GridChargerTruckiConfig& target);
+    static void deserializeBatteryGuardConfig(JsonObject const& source, BatteryGuardConfig& target);
 
 private:
     void loop();
