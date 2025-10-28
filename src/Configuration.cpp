@@ -267,6 +267,27 @@ void ConfigurationClass::serializeGridChargerTruckiConfig(GridChargerTruckiConfi
     target["password"] = source.Password;
 }
 
+void ConfigurationClass::serializeBatteryGuardConfig(BatteryGuardConfig const& source, PowerLimiterConfig const& sourceP, JsonObject& target)
+{
+    target["enabled"] = source.Enabled;
+    target["voltage_drop_compensation_enabled"] = source.VoltageDropCompensationEnabled;
+    target["internal_resistance"] = source.InternalResistance;
+    target["low_voltage_limiter_enabled"] = source.LowVoltageLimiterEnabled;
+    target["dpl_start_threshold"] = sourceP.VoltageStartThreshold; // we use the power limiter settings here
+    target["dpl_stop_threshold"] = sourceP.VoltageStopThreshold;   // we use the power limiter settings here
+    target["recharge_helper_enabled"] = source.RechargeHelperEnabled;
+    target["excessive_solar_power_disabled"] = source.ExcessiveSolarPowerDisabled;
+    target["duration_idle"] = source.DurationIdle;
+    target["duration_stage1"] = source.DurationStage1;
+    target["duration_stage2"] = source.DurationStage2;
+    target["max_start_threshold"] = source.MaxVoltageStartThreshold;
+    target["max_stop_threshold"] = source.MaxVoltageStopThreshold;
+    target["use_voltage_thresholds"] = source.UseVoltageThresholds;
+    target["max_soc_start_threshold"] = source.MaxSoCStartThreshold;
+    target["max_soc_stop_threshold"] = source.MaxSoCStopThreshold;
+    target["upper_power_limit"] = source.UpperPowerLimit;
+}
+
 bool ConfigurationClass::write()
 {
     File f = LittleFS.open(CONFIG_FILENAME, "w");
@@ -457,6 +478,9 @@ bool ConfigurationClass::write()
 
     JsonObject gridcharger_trucki = gridcharger["trucki"].to<JsonObject>();
     serializeGridChargerTruckiConfig(config.GridCharger.Trucki, gridcharger_trucki);
+
+    JsonObject batteryGuard = doc["batteryguard"].to<JsonObject>();
+    serializeBatteryGuardConfig(config.BatteryGuard, config.PowerLimiter, batteryGuard);
 
     if (!Utils::checkJsonAlloc(doc, __FUNCTION__, __LINE__)) {
         return false;
@@ -702,6 +726,25 @@ void ConfigurationClass::deserializeGridChargerTruckiConfig(JsonObject const& so
     strlcpy(target.Password, source["password"] | "", sizeof(target.Password));
 }
 
+void ConfigurationClass::deserializeBatteryGuardConfig(JsonObject const& source, BatteryGuardConfig& target)
+{
+    target.Enabled = source["enabled"] | BATTERYGUARD_ENABLED;
+    target.VoltageDropCompensationEnabled = source["voltage_drop_compensation_enabled"] | BATTERYGUARD_COMPENSATION_ENABLED;
+    target.InternalResistance = source["internal_resistance"] | BATTERYGUARD_INTERNAL_RESISTANCE;
+    target.LowVoltageLimiterEnabled = source["low_voltage_limiter_enabled"] | BATTERYGUARD_LOW_VOLTAGE_LIMITER_ENABLED;
+    target.RechargeHelperEnabled = source["recharge_helper_enabled"] | BATTERYGUARD_RECHARGE_HELPER_ENABLED;
+    target.ExcessiveSolarPowerDisabled = source["excessive_solar_power_disabled"] | BATTERYGUARD_EXCESSIVE_SOLAR_DISABLED;
+    target.DurationIdle = source["duration_idle"] | BATTERYGUARD_DURATION_IDLE;
+    target.DurationStage1 = source["duration_stage1"] | BATTERYGUARD_DURATION_STAGE1;
+    target.DurationStage2 = source["duration_stage2"] | BATTERYGUARD_DURATION_STAGE2;
+    target.MaxVoltageStartThreshold = source["max_start_threshold"] | BATTERYGUARD_MAX_START_THRESHOLD;
+    target.MaxVoltageStopThreshold = source["max_stop_threshold"] | BATTERYGUARD_MAX_STOP_THRESHOLD;
+    target.UseVoltageThresholds = source["use_voltage_thresholds"] | BATTERYGUARD_USE_VOLTAGE_THRESHOLDS;
+    target.MaxSoCStartThreshold = source["max_soc_start_threshold"] | BATTERYGUARD_MAX_SOC_START_THRESHOLD;
+    target.MaxSoCStopThreshold = source["max_soc_stop_threshold"] | BATTERYGUARD_MAX_SOC_STOP_THRESHOLD;
+    target.UpperPowerLimit = source["upper_power_limit"] | BATTERYGUARD_UPPER_POWER_LIMIT;
+}
+
 bool ConfigurationClass::read()
 {
     File f = LittleFS.open(CONFIG_FILENAME, "r", false);
@@ -916,6 +959,7 @@ bool ConfigurationClass::read()
     deserializeGridChargerCanConfig(gridcharger["can"], config.GridCharger.Can);
     deserializeGridChargerHuaweiConfig(gridcharger["huawei"], config.GridCharger.Huawei);
     deserializeGridChargerTruckiConfig(gridcharger["trucki"], config.GridCharger.Trucki);
+    deserializeBatteryGuardConfig(doc["batteryguard"], config.BatteryGuard);
 
     f.close();
 
