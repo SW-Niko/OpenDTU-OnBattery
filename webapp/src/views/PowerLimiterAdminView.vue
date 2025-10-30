@@ -225,6 +225,96 @@
                     />
 
                     <InputElement
+                        v-if="canUseSolarPassthrough || powerLimiterConfigList.surplus_enabled"
+                        :label="$t('powerlimiteradmin.EnableSurplus')"
+                        :tooltip="$t('powerlimiteradmin.SurplusHint')"
+                        v-model="powerLimiterConfigList.surplus_enabled"
+                        type="checkbox"
+                        wide
+                    />
+
+                    <template v-if="canUseSolarPassthrough && powerLimiterConfigList.surplus_enabled">
+                        <InputElement
+                            :label="$t('powerlimiteradmin.SurplusPowerLimit')"
+                            :tooltip="$t('powerlimiteradmin.SurplusPowerLimitHint')"
+                            v-model="powerLimiterConfigList.surplus_power_limit"
+                            min="0"
+                            step="1"
+                            postfix="W"
+                            type="number"
+                            wide
+                        />
+
+                        <InputElement
+                            :label="$t('powerlimiteradmin.SurplusTweak')"
+                            :tooltip="$t('powerlimiteradmin.SurplusTweakHint')"
+                            v-model="powerLimiterConfigList.surplus_tweak_enabled"
+                            type="checkbox"
+                            wide
+                        />
+
+                        <template v-if="powerLimiterConfigList.surplus_tweak_enabled">
+                            <InputElement
+                                :label="$t('powerlimiteradmin.SurplusSafetyMinutes')"
+                                :tooltip="$t('powerlimiteradmin.SurplusSafetyMinutesHint')"
+                                v-model="powerLimiterConfigList.surplus_safety_minutes"
+                                min="0"
+                                max="240"
+                                step="1"
+                                postfix="Min"
+                                type="number"
+                                wide
+                            />
+
+                            <InputElement
+                                :label="$t('powerlimiteradmin.SurplusSafetyFactor')"
+                                :tooltip="$t('powerlimiteradmin.SurplusSafetyFactorHint')"
+                                v-model="powerLimiterConfigList.surplus_safety_factor"
+                                min="0"
+                                max="100"
+                                step="1"
+                                postfix="%"
+                                type="number"
+                                wide
+                            />
+
+                            <InputElement
+                                :label="$t('powerlimiteradmin.SurplusSlope')"
+                                :tooltip="$t('powerlimiteradmin.SurplusSlopeHint')"
+                                v-model="powerLimiterConfigList.surplus_slope_enabled"
+                                type="checkbox"
+                                wide
+                            />
+
+                            <template v-if="powerLimiterConfigList.surplus_slope_enabled">
+                                <InputElement
+                                    :label="$t('powerlimiteradmin.SurplusSlopeTargetPower')"
+                                    :tooltip="$t('powerlimiteradmin.SurplusSlopeTargetPowerHint')"
+                                    v-model="powerLimiterConfigList.surplus_slope_target_power"
+                                    min="-500"
+                                    max="0"
+                                    step="1"
+                                    postfix="W"
+                                    type="number"
+                                    wide
+                                />
+
+                                <InputElement
+                                    :label="$t('powerlimiteradmin.SurplusSlopeDecreaseRate')"
+                                    :tooltip="$t('powerlimiteradmin.SurplusSlopeDecreaseRateHint')"
+                                    v-model="powerLimiterConfigList.surplus_slope_decrease_rate"
+                                    min="-100"
+                                    max="0"
+                                    step="1"
+                                    postfix="W/s"
+                                    type="number"
+                                    wide
+                                />
+                            </template>
+                        </template>
+                    </template>
+
+                    <InputElement
                         :label="$t('powerlimiteradmin.BatteryDischargeAtNight')"
                         :tooltip="$t('powerlimiteradmin.BatteryDischargeAtNightHint')"
                         v-model="powerLimiterConfigList.battery_always_use_at_night"
@@ -333,8 +423,16 @@
 
                     <template v-if="isSolarPassthroughEnabled">
                         <InputElement
-                            :label="$t('powerlimiteradmin.FullSolarPassthroughStartThreshold')"
-                            :tooltip="$t('powerlimiteradmin.FullSolarPassthroughStartThresholdHint')"
+                            :label="
+                                isSurplusEnabled
+                                    ? $t('powerlimiteradmin.SurplusStartThreshold')
+                                    : $t('powerlimiteradmin.FullSolarPassthroughStartThreshold')
+                            "
+                            :tooltip="
+                                isSurplusEnabled
+                                    ? $t('powerlimiteradmin.SurplusStartThresholdHint')
+                                    : $t('powerlimiteradmin.FullSolarPassthroughStartThresholdHint')
+                            "
                             v-model="powerLimiterConfigList.full_solar_passthrough_start_voltage"
                             placeholder="49"
                             min="16"
@@ -346,7 +444,11 @@
                         />
 
                         <InputElement
-                            :label="$t('powerlimiteradmin.VoltageSolarPassthroughStopThreshold')"
+                            :label="
+                                isSurplusEnabled
+                                    ? $t('powerlimiteradmin.SurplusStopThreshold')
+                                    : $t('powerlimiteradmin.VoltageSolarPassthroughStopThreshold')
+                            "
                             v-model="powerLimiterConfigList.full_solar_passthrough_stop_voltage"
                             placeholder="49"
                             min="16"
@@ -404,8 +506,16 @@
                     />
 
                     <InputElement
-                        :label="$t('powerlimiteradmin.FullSolarPassthroughStartThreshold')"
-                        :tooltip="$t('powerlimiteradmin.FullSolarPassthroughStartThresholdHint')"
+                        :label="
+                            isSurplusEnabled
+                                ? $t('powerlimiteradmin.SurplusStartThreshold')
+                                : $t('powerlimiteradmin.FullSolarPassthroughStartThreshold')
+                        "
+                        :tooltip="
+                            isSurplusEnabled
+                                ? $t('powerlimiteradmin.SurplusStartThresholdHint')
+                                : $t('powerlimiteradmin.FullSolarPassthroughStartThresholdHint')
+                        "
                         v-model="powerLimiterConfigList.full_solar_passthrough_soc"
                         v-if="isSolarPassthroughEnabled"
                         placeholder="80"
@@ -507,8 +617,11 @@ export default defineComponent({
         isSolarPassthroughEnabled(): boolean {
             return (
                 this.powerLimiterMetaData.charge_controller_enabled &&
-                this.powerLimiterConfigList.solar_passthrough_enabled
+                (this.powerLimiterConfigList.solar_passthrough_enabled || this.powerLimiterConfigList.surplus_enabled)
             );
+        },
+        isSurplusEnabled(): boolean {
+            return this.powerLimiterMetaData.charge_controller_enabled && this.powerLimiterConfigList.surplus_enabled;
         },
         hasPowerMeter(): boolean {
             return this.powerLimiterMetaData.power_meter_enabled;
