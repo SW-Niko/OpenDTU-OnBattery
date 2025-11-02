@@ -26,6 +26,7 @@ import SystemInfoView from '@/views/SystemInfoView.vue';
 import WaitRestartView from '@/views/WaitRestartView.vue';
 import BatteryGuardAdminView from '@/views/BatteryGuardAdminView.vue';
 import BatteryGuardInfoView from '@/views/BatteryGuardInfoView.vue';
+import SurplusInfoView from '@/views/SurplusInfoView.vue';
 import { createRouter, createWebHistory } from 'vue-router';
 
 const router = createRouter({
@@ -78,6 +79,11 @@ const router = createRouter({
             path: '/info/mqtt',
             name: 'MqTT',
             component: MqttInfoView,
+        },
+        {
+            path: '/info/surplus',
+            name: 'Surplus',
+            component: SurplusInfoView,
         },
         {
             path: '/info/console',
