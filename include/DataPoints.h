@@ -78,14 +78,14 @@ class DataPointContainer {
         // be set, which means that this data point is "timeless" and hence is
         // ignored in the getLastUpdate() method.
         template<Label L>
-        void add(typename Traits<L>::type val, bool ignoreAge = false) {
+        void add(typename Traits<L>::type val, bool ignoreAge = false, uint32_t time = 0) {
             // no locking here! iff thread safety is required, use the lock()
             // method in a scoped block in which this method is called, as we
             // expect that usually multiple data points are added at a time.
 
             _dataPoints.erase(L);
 
-            uint32_t timestamp = ignoreAge ? 0 : millis();
+            uint32_t timestamp = (ignoreAge ? 0 : (time == 0 ? millis() : time));
             if (!ignoreAge && timestamp == 0) { timestamp = 1; }
 
             _dataPoints.emplace(
