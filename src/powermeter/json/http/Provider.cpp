@@ -162,6 +162,7 @@ void Provider::pollingLoop()
 Provider::poll_result_t Provider::poll()
 {
     JsonDocument jsonResponse;
+    auto pollStart = millis(); // used as timestamp for the data points
 
     auto prefixedError = [](uint8_t idx, char const* err) -> String {
         String res("Value ");
@@ -217,19 +218,21 @@ Provider::poll_result_t Provider::poll()
 
         if (cfg.SignInverted) { newValue *= -1; }
 
+        // Note: we use the poll start time as timestamp for the data point, because this is more safe
+        // and represents better the time when the measurement was taken
         {
             auto scopedLock = _dataCurrent.lock();
             switch (i) {
                 case 0:
-                    _dataCurrent.add<DataPointLabel::PowerL1>(newValue);
+                    _dataCurrent.add<DataPointLabel::PowerL1>(newValue, false, pollStart);
                     break;
 
                 case 1:
-                    _dataCurrent.add<DataPointLabel::PowerL2>(newValue);
+                    _dataCurrent.add<DataPointLabel::PowerL2>(newValue, false, pollStart);
                     break;
 
                 case 2:
-                    _dataCurrent.add<DataPointLabel::PowerL3>(newValue);
+                    _dataCurrent.add<DataPointLabel::PowerL3>(newValue, false, pollStart);
                     break;
 
                 default:
