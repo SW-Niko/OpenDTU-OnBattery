@@ -23,6 +23,7 @@
 #include <LogHelper.h>
 #include <battery/Controller.h>
 #include "RuntimeData.h"
+#include "PowerLimiter.h"
 
 
 #undef TAG
@@ -111,6 +112,8 @@ bool RuntimeClass::write(uint16_t const freezeMinutes)
 
         // ensure any additional shared data added here remains under the existing mutex protection
         Battery.serializeRTD(doc["battery"].to<JsonObject>());
+        PowerLimiter.serializeRTD(doc["power_limiter"].to<JsonObject>());
+
 
         if (!Utils::checkJsonAlloc(doc, __FUNCTION__, __LINE__)) {
             return cleanExit(false, "JSON alloc fault, skipping write");
@@ -169,9 +172,11 @@ bool RuntimeClass::read(ReadMode const mode)
     // use ReadMode::START_UP for all data that can be initialized during startup
     if (mode == ReadMode::START_UP) {
         Battery.deserializeRTD(doc["battery"]);
+        PowerLimiter.deserializeRTD(doc["power_limiter"]);
     } else {
         ;
     }
+
 
     if (fRuntime) { fRuntime.close(); }
     if (readOk) {
