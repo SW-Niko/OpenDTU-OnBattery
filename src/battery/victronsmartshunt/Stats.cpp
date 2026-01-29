@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include <MqttSettings.h>
 #include <battery/victronsmartshunt/Stats.h>
+#include <Utils.h>
 
 namespace Batteries::VictronSmartShunt {
 
@@ -65,6 +66,26 @@ void Stats::mqttPublish() const {
     MqttSettings.publish("battery/lastFullCharge", String(_lastFullCharge));
     MqttSettings.publish("battery/midpointVoltage", String(_midpointVoltage));
     MqttSettings.publish("battery/midpointDeviation", String(_midpointDeviation));
+}
+
+void Stats::checkSoCFullEpoch(void) {
+    static uint32_t lastUpdate = 0;
+
+    if (lastUpdate == _lastUpdate) { return; } // fast exit from already processed values
+    lastUpdate = _lastUpdate;
+    time_t nowEpoch;
+
+    if (Utils::getEpoch(&nowEpoch, 5)) {
+
+        // reverse calculation to get 'fully charged epoch' from the smart shunt duration value
+        auto shuntEpoch = std::make_optional(nowEpoch - static_cast<time_t>(_lastFullCharge * 60));
+        auto lastEpoch = getSoCFullEpoch();
+
+        // We only update if the value is not in the future and we don't have epoch yet or we have a newer value
+        if ((shuntEpoch.value() <= nowEpoch) && (!lastEpoch.has_value() || (shuntEpoch.value() > lastEpoch))) {
+            setSoCFullEpoch(shuntEpoch);
+        }
+    }
 }
 
 } // namespace Batteries::VictronSmartShunt
