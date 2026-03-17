@@ -134,6 +134,10 @@ void Stats::mqttPublish() const
         MqttSettings.publish("battery/voltage", String(_voltage));
     }
 
+    if (BatteryGuard.getOpenCircuitVoltage().has_value()) {
+        MqttSettings.publish("battery/open_circuit_voltage", String(BatteryGuard.getOpenCircuitVoltage().value()));
+    }
+
     if (isCurrentValid()) {
         MqttSettings.publish("battery/current", String(_current));
     }
@@ -144,6 +148,10 @@ void Stats::mqttPublish() const
 
     if (isChargeCurrentLimitValid()) {
         MqttSettings.publish("battery/settings/chargeCurrentLimitation", String(_chargeCurrentLimit));
+    }
+
+    if (BatteryGuard.getCalculatedResistance().has_value()) {
+        MqttSettings.publish("battery/calculated_resistance", String(BatteryGuard.getCalculatedResistance().value()));
     }
 }
 
