@@ -12,10 +12,10 @@ void WebApiBatteryGuardClass::init(AsyncWebServer& server, Scheduler& scheduler)
 
     _server = &server;
 
-    _server->on("/api/batteryguard/status", HTTP_GET, std::bind(&WebApiBatteryGuardClass::onStatus, this, _1));
-    _server->on("/api/batteryguard/config", HTTP_GET, std::bind(&WebApiBatteryGuardClass::onAdminGet, this, _1));
-    _server->on("/api/batteryguard/config", HTTP_POST, std::bind(&WebApiBatteryGuardClass::onAdminPost, this, _1));
-    _server->on("/api/batteryguard/metadata", HTTP_GET, std::bind(&WebApiBatteryGuardClass::onMetaData, this, _1));
+    _server->on("/api/batteryguard/status", HTTP_GET, static_cast<ArRequestHandlerFunction>(std::bind(&WebApiBatteryGuardClass::onStatus, this, _1)));
+    _server->on("/api/batteryguard/config", HTTP_GET, static_cast<ArRequestHandlerFunction>(std::bind(&WebApiBatteryGuardClass::onAdminGet, this, _1)));
+    _server->on("/api/batteryguard/config", HTTP_POST, static_cast<ArRequestHandlerFunction>(std::bind(&WebApiBatteryGuardClass::onAdminPost, this, _1)));
+    _server->on("/api/batteryguard/metadata", HTTP_GET, static_cast<ArRequestHandlerFunction>(std::bind(&WebApiBatteryGuardClass::onMetaData, this, _1)));
 }
 
 void WebApiBatteryGuardClass::onStatus(AsyncWebServerRequest* request)
