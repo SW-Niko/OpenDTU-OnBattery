@@ -257,15 +257,14 @@ void PowerLimiterClass::loop()
         // STOP and DISCHARGE_NIGHT. To avoid this problem, we allow only one transmission from STOP to DISCHARGE_NIGHT per night.
         // In case of restart or power-cycle, we accept that the inverter may start discharging at night once again.
         // Start-Up can be tricky, because data from the battery provider may not be available. As fallback we use the not very
-        // accurate inverter voltage and this can lead to the wrong state. Especially if we use the runtime file to save the state.
+        // accurate inverter voltage and this can lead to the wrong state.
 
-        // check if have a battery powered inverter
+        // check if we have a battery powered inverter
         if (!usesBatteryPoweredInverter()) { return BatteryState::STOP; }
 
         // check the stop condition
         auto day = SunPosition.isDayPeriod();
-        auto resultBatteryGuard = BatteryGuard.isStopThresholdReached(_batteryState == BatteryState::STOP);
-        if (resultBatteryGuard.has_value() ? resultBatteryGuard.value() : isStopThresholdReached()) {
+        if (isStopThresholdReached()) {
             _fromStart = false;
             _oneStopPerNightDone = day ? false : true;
             return BatteryState::STOP;
@@ -287,19 +286,20 @@ void PowerLimiterClass::loop()
         auto solarPassThroughEnabled = isSolarPassThroughEnabled();
         auto isBatteryAlwaysUseAtNightEnabled = config.PowerLimiter.BatteryAlwaysUseAtNight;
 
-        if (!isBatteryAlwaysUseAtNightEnabled) { _oneStopPerNightDone = false; }
-
-        if (!solarPassThroughEnabled && !isBatteryAlwaysUseAtNightEnabled) { return BatteryState::STOP; }
-
-        if (solarPassThroughEnabled && !isBatteryAlwaysUseAtNightEnabled) { return BatteryState::NO_DISCHARGE; }
-
-        // we reach this line only if 'Use Battery at night' is enabled
-        if (day) {
+        // When `Use Battery at night` is disabled or when its day, battery should not be discharged
+        if (!isBatteryAlwaysUseAtNightEnabled || day) {
             _oneStopPerNightDone = false;
-            return (solarPassThroughEnabled) ? BatteryState::DISCHARGE_ALLOWED : BatteryState::STOP;
-        } else {
-            return (_oneStopPerNightDone) ? BatteryState::STOP : BatteryState::DISCHARGE_NIGHT;
-        }
+
+            // Only allow inverters to be active if we are in solar pass-through mode.
+            // Otherwise we stop the battery inverters.
+            if (solarPassThroughEnabled) { return BatteryState::NO_DISCHARGE; }
+            return BatteryState::STOP;
+         }
+
+        // When `Use Battery at night` is enabled, and its night and we have already stopped the battery once per night, we keep the STOP state.
+        // Otherwise we allow discharging of a partially charged battery.
+        if (_oneStopPerNightDone) { return BatteryState::STOP; }
+        return BatteryState::DISCHARGE_NIGHT;
     };
 
     auto getFullSolarPassthrough = [this,&config]() -> bool {
