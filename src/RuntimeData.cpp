@@ -33,10 +33,10 @@ static const char* SUBTAG = "Handler";
 
 
 constexpr const char* RUNTIME_FILENAME = "/runtime.json";   // filename of the runtime data file
-constexpr uint16_t RUNTIME_VERSION = 0;                     // version of the runtime data structure, prepared for future use
+constexpr uint16_t RUNTIME_VERSION = 1;                     // version prepared for future migration support
 
 
-RuntimeClass RuntimeData {RUNTIME_VERSION}; // singleton instance
+RuntimeClass RuntimeData; // singleton instance
 
 
 /*
@@ -99,39 +99,47 @@ bool RuntimeClass::write(uint16_t const freezeMinutes)
 
         // check minimum interval between writes (enforced only when freezeMinutes > 0)
         if ((freezeMinutes > 0) && (_writeEpoch != 0) && (difftime(nextEpoch, _writeEpoch) < 60 * freezeMinutes)) {
-            return cleanExit(false, "Time interval between 2 write operations too short, skipping write");
+            return cleanExit(false, "Time interval too short, skipping write");
         }
 
         // prepare the next write count
         nextCount = _writeCount + 1;
 
-        JsonDocument doc;
-        JsonObject info = doc["info"].to<JsonObject>();
-        info["version"] = RUNTIME_VERSION;
-        info["save_count"] = nextCount;
-        info["save_epoch"] = nextEpoch;
+    } // mutex is automatically released when lock goes out of this scope
 
-        // ensure any additional shared data added here remains under the existing mutex protection
-        Battery.serializeRTD(doc["battery"].to<JsonObject>());
-        PowerLimiter.serializeRTD(doc["power_limiter"].to<JsonObject>());
-        BatteryGuard.serializeRTD(doc["battery_guard"].to<JsonObject>());
+    // prepare the JSON document and store the runtime data in it is done outside the
+    // mutex protection to minimize the time the mutex is locked.
+    JsonDocument doc;
+    JsonObject info = doc["info"].to<JsonObject>();
+    info["version"] = RUNTIME_VERSION;
+    info["save_count"] = nextCount;
+    info["save_epoch"] = nextEpoch;
 
-        if (!Utils::checkJsonAlloc(doc, __FUNCTION__, __LINE__)) {
-            return cleanExit(false, "JSON alloc fault, skipping write");
-        }
+    // serialize additional runtime data here
+    // make sure the additional data remains under its own mutex protection.
+    Battery.serializeRTD(doc["battery"].to<JsonObject>());
+    PowerLimiter.serializeRTD(doc["power_limiter"].to<JsonObject>());
+    BatteryGuard.serializeRTD(doc["battery_guard"].to<JsonObject>());
 
-        File fRuntime = LittleFS.open(RUNTIME_FILENAME, "w");
-        if (!fRuntime) { return cleanExit(false, "Failed to open file for writing"); }
+    if (!Utils::checkJsonAlloc(doc, __FUNCTION__, __LINE__)) {
+        return cleanExit(false, "JSON alloc fault, skipping write");
+    }
 
-        if (serializeJson(doc, fRuntime) == 0) {
-            fRuntime.close();
-            return cleanExit(false, "Failed to serialize to file");
-        }
+    File fRuntime = LittleFS.open(RUNTIME_FILENAME, "w");
+    if (!fRuntime) { return cleanExit(false, "Failed to open file for writing"); }
 
+    if (serializeJson(doc, fRuntime) == 0) {
         fRuntime.close();
+        return cleanExit(false, "Failed to serialize to file");
+    }
+
+    fRuntime.close();
+
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
 
         // commit the new state only after a successful write
-        _writeVersion = RUNTIME_VERSION;
+        _fileVersion = RUNTIME_VERSION;
         _writeEpoch = nextEpoch;
         _writeCount = nextCount;
 
@@ -164,7 +172,7 @@ bool RuntimeClass::read(ReadMode const mode)
     JsonObject info = doc["info"];
     { // mutex is automatically released when lock goes out of this scope
         std::lock_guard<std::mutex> lock(_mutex);
-        _writeVersion = info["version"] | RUNTIME_VERSION;
+        _fileVersion = info["version"] | 0U; // 0 means no file available and runtime data is not valid
         _writeCount = info["save_count"] | 0U;
         _writeEpoch = info["save_epoch"] | 0U;
     } // mutex is automatically released when lock goes out of this scope
@@ -176,7 +184,7 @@ bool RuntimeClass::read(ReadMode const mode)
         PowerLimiter.deserializeRTD(doc["power_limiter"]);
         BatteryGuard.deserializeRTD(doc["battery_guard"]);
     } else {
-        ;
+        ; // todo: deserialize additional runtime data that can not be initialized during startup
     }
 
 
@@ -218,19 +226,26 @@ time_t RuntimeClass::getWriteEpochTime(void) const
  */
 String RuntimeClass::getWriteCountAndTimeString(void) const
 {
-    std::lock_guard<std::mutex> lock(_mutex);
+    time_t epoch;
+    uint16_t count;
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        epoch = _writeEpoch;
+        count = _writeCount;
+    } // mutex is automatically released when lock goes out of this scope
+
     char buf[32] = "";
     struct tm time;
 
     // Before we can convert the epoch to local time, we need to ensure we've received the correct time
-    // from the time server. This may take some time after the system boots.
-    if ((_writeEpoch != 0) && (getLocalTime(&time, 5))) {
-        localtime_r(&_writeEpoch, &time);
+    // from the time server. This may take some time after the system startup.
+    if ((epoch != 0) && (getLocalTime(&time, 1))) {
+        localtime_r(&epoch, &time);
         strftime(buf, sizeof(buf), " / %d-%h %R", &time);
     } else {
         snprintf(buf, sizeof(buf), " / no time");
     }
-    String ctString = String(_writeCount) + String(buf);
+    String ctString = String(count) + String(buf);
     return ctString;
 }
 

@@ -9,7 +9,7 @@
 
 class RuntimeClass {
 public:
-    explicit RuntimeClass(uint16_t version) : _writeVersion(version) {};
+    RuntimeClass() = default;
     ~RuntimeClass() = default;
     RuntimeClass(const RuntimeClass&) = delete;
     RuntimeClass& operator=(const RuntimeClass&) = delete;
@@ -40,7 +40,7 @@ private:
     std::atomic<bool> _writeNow = false;    // if true, the data is stored in the next loop()
     mutable std::mutex _mutex;              // to protect the shared data below
     bool _lastTrigger = false;              // auxiliary value to prevent multiple triggering on the same day
-    uint16_t _writeVersion = 0;             // shared data: version of the runtime data
+    uint16_t _fileVersion = 0;              // shared data: version of the runtime data file, prepared for future migration support
     uint16_t _writeCount = 0;               // shared data: number of write operations
     time_t _writeEpoch = 0;                 // shared data: epoch time when the data was written
 };
