@@ -86,6 +86,9 @@ private:
     bool _fullSolarPassThroughActive = false;
     float _loadCorrectedVoltage = 0.0f;
 
+    uint32_t _lastPowerMeterUpdate = 0; // timestamp of last power meter update
+    uint16_t _lastConsumptionPower = 0; // last calculated consumption power
+
     frozen::string const& getStatusText(Status status) const;
     void announceStatus(Status status);
     void reloadConfig();
@@ -93,7 +96,7 @@ private:
     float getBatteryVoltage(bool log = false) const;
     uint16_t dcPowerBusToInverterAc(uint16_t dcPower) const;
     void unconditionalFullSolarPassthrough();
-    uint16_t calcTargetOutput() const;
+    uint16_t calcTargetOutput(bool loggingRequested = true) const;
     using inverter_filter_t = std::function<bool(PowerLimiterInverter const&)>;
     uint16_t updateInverterLimits(uint16_t powerRequested, inverter_filter_t filter, std::string const& filterExpression);
     uint16_t calcPowerBusUsage(uint16_t powerRequested) const;
@@ -114,6 +117,8 @@ private:
     float getPrioritySoCStopThreshold(void) const;
     float getPriorityVoltageStartThreshold(void) const;
     float getPriorityVoltageStopThreshold(void) const;
+
+    bool isConsumptionPowerChangeSufficient();
 };
 
 extern PowerLimiterClass PowerLimiter;
