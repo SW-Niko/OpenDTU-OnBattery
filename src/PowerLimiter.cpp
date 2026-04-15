@@ -263,8 +263,11 @@ void PowerLimiterClass::loop()
         if (!usesBatteryPoweredInverter()) { return BatteryState::STOP; }
 
         // check the stop condition
+        // if the battery guard is active and provides a valid stop result, we use it.
+        // in any other case, we fall back to the DPL's own stop method.
         auto day = SunPosition.isDayPeriod();
-        if (isStopThresholdReached()) {
+        auto resultBatteryGuard = BatteryGuard.isStopThresholdReached(_batteryState == BatteryState::STOP);
+        if (resultBatteryGuard.has_value() ? resultBatteryGuard.value() : isStopThresholdReached()) {
             _fromStart = false;
             _oneStopPerNightDone = day ? false : true;
             return BatteryState::STOP;
