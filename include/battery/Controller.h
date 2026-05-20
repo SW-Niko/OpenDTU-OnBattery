@@ -15,6 +15,7 @@ public:
     void updateSettings();
 
     float getDischargeCurrentLimit();
+    float getChargeCurrentLimit() const;
 
     void serializeRTD(JsonObject const&) const;
     void deserializeRTD(JsonObject const&);

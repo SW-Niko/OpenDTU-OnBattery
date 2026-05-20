@@ -20,7 +20,8 @@
 
 #include <Utils.h>
 #include <LittleFS.h>
-#include <LogHelper.h>
+#include <esp_log.h>
+#include <ArduinoJson.h>
 #include <battery/Controller.h>
 #include "BatteryGuard.h"
 #include "RuntimeData.h"
@@ -28,8 +29,7 @@
 
 
 #undef TAG
-static const char* TAG = "runtimedata";
-static const char* SUBTAG = "Handler";
+static const char* TAG = "runtime";
 
 
 constexpr const char* RUNTIME_FILENAME = "/runtime.json";   // filename of the runtime data file
@@ -59,15 +59,13 @@ void RuntimeClass::loop(void)
 {
 
     // check if we need to write the runtime data, either it is 00:05 or on request
-    if (_writeNow || getWriteTrigger()) {
-        _writeNow = false;
+    if (_writeNow.exchange(false) || getWriteTrigger()) {
         write(0); // no freeze time.
     }
 
     // check if we need to read the runtime data on request
     // for example, if some data is not available during startup
-    if (_readNow) {
-        _readNow = false;
+    if (_readNow.exchange(false)) {
         read(ReadMode::ON_DEMAND); // read data that can be read on demand
     }
 }
@@ -81,17 +79,17 @@ bool RuntimeClass::write(uint16_t const freezeMinutes)
 {
     auto cleanExit = [this](const bool writeOk, const char* text) -> bool {
         if (writeOk) {
-            DTU_LOGI("%s", text);
+            ESP_LOGI(TAG,"%s", text);
         } else {
-            DTU_LOGE("%s", text);
+            ESP_LOGE(TAG,"%s", text);
         }
-        _writeOK = writeOk;
+        _writeOK.store(writeOk);
         return writeOk;
     };
 
-    // we need the next local time before we can write the runtime data
+    // we need a valid epoch time before we can write the runtime data
     time_t nextEpoch;
-    if (!Utils::getEpoch(&nextEpoch, 5)) { return cleanExit(false, "Local time not available, skipping write"); }
+    if (!Utils::getEpoch(&nextEpoch, 1)) { return cleanExit(false, "Local time not available, skipping write"); }
     uint16_t nextCount;
 
     {
@@ -117,9 +115,7 @@ bool RuntimeClass::write(uint16_t const freezeMinutes)
 
     // serialize additional runtime data here
     // make sure the additional data remains under its own mutex protection.
-    Battery.serializeRTD(doc["battery"].to<JsonObject>());
-    PowerLimiter.serializeRTD(doc["power_limiter"].to<JsonObject>());
-    BatteryGuard.serializeRTD(doc["battery_guard"].to<JsonObject>());
+    // todo: serialize additional runtime data
 
     if (!Utils::checkJsonAlloc(doc, __FUNCTION__, __LINE__)) {
         return cleanExit(false, "JSON alloc fault, skipping write");
@@ -190,11 +186,11 @@ bool RuntimeClass::read(ReadMode const mode)
 
     if (fRuntime) { fRuntime.close(); }
     if (readOk) {
-        DTU_LOGI("Read successfully");
+        ESP_LOGI(TAG, "Read successfully");
     } else {
-        DTU_LOGE("Read fault, using default values");
+        ESP_LOGE(TAG, "Read fault, using default values");
     }
-    _readOK = readOk;
+    _readOK.store(readOk);
     return readOk;
 }
 
@@ -256,7 +252,7 @@ String RuntimeClass::getWriteCountAndTimeString(void) const
 bool RuntimeClass::getWriteTrigger(void) {
 
     struct tm nowTime;
-    if (!getLocalTime(&nowTime, 5)) {
+    if (!getLocalTime(&nowTime, 1)) {
         return false;
     }
 

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 
-#include <ArduinoJson.h>
 #include <TaskSchedulerDeclarations.h>
 #include <mutex>
 #include <atomic>
@@ -18,15 +17,15 @@ public:
 
     void init(Scheduler& scheduler);
     enum class ReadMode : uint8_t { START_UP, ON_DEMAND };
-    bool read(ReadMode const mode = ReadMode::START_UP);            // read runtime data
-    bool write(uint16_t const freezeMinutes = 10);                  // do not write if last write operation was less than freezeMinutes ago
-    void requestWriteOnNextTaskLoop(void) { _writeNow = true; };    // use this member function to store data on demand
-    void requestReadOnNextTaskLoop(void) { _readNow = true; };      // use this member function to read data on demand
+    bool read(ReadMode const mode = ReadMode::START_UP);                // read runtime data
+    bool write(uint16_t const freezeMinutes = 10);                      // do not write if last write operation was less than freezeMinutes ago
+    void requestWriteOnNextTaskLoop(void) { _writeNow.store(true); };   // use this member function to store data on demand
+    void requestReadOnNextTaskLoop(void) { _readNow.store(true); };     // use this member function to read data on demand
 
     uint16_t getWriteCount(void) const;
     time_t getWriteEpochTime(void) const;
-    bool getReadState(void) const { return _readOK; }
-    bool getWriteState(void) const { return _writeOK; }
+    bool getReadState(void) const { return _readOK.load(); }
+    bool getWriteState(void) const { return _writeOK.load(); }
     String getWriteCountAndTimeString(void) const;
 
 private:
@@ -36,8 +35,8 @@ private:
     Task _loopTask;
     std::atomic<bool> _readOK = false;      // true if the last read operation was successful
     std::atomic<bool> _writeOK = false;     // true if the last write operation was successful
-    std::atomic<bool> _readNow = false;     // if true, the data is read in the next loop()
-    std::atomic<bool> _writeNow = false;    // if true, the data is stored in the next loop()
+    std::atomic<bool> _readNow = false;     // if true, the data is read in the next task loop()
+    std::atomic<bool> _writeNow = false;    // if true, the data is stored in the next task loop()
     mutable std::mutex _mutex;              // to protect the shared data below
     bool _lastTrigger = false;              // auxiliary value to prevent multiple triggering on the same day
     uint16_t _fileVersion = 0;              // shared data: version of the runtime data file, prepared for future migration support

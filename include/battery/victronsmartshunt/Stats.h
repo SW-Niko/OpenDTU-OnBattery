@@ -15,8 +15,6 @@ public:
     void checkSoCFullEpoch(void) final;
 
 private:
-    float _temperature;
-    bool _tempPresent;
     uint8_t _chargeCycles;
     uint32_t _timeToGo;
     float _chargedEnergy;
