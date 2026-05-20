@@ -662,11 +662,12 @@ uint16_t PowerLimiterClass::updateInverterLimits(uint16_t powerRequested,
 
     if (matchingInverters.empty()) { return 0; }
 
-    // if we have battery-powered inverters and the battery is below the stop threshold,
-    // we set all into standby
+    // if we update battery-powered inverters and the battery is in the STOP state,
+    // we must put all battery-powered inverters into standby mode,
+    // regardless of whether the standby option is enabled or not.
     if ((matchingInverters[0]->isBatteryPowered()) && (_batteryState == BatteryState::STOP)) {
         for (auto pInv : matchingInverters) { pInv->standby(); }
-        DTU_LOGD("battery below stop threshold, all battery-powered inverters are stopped");
+        DTU_LOGD("battery is in STOP state, all battery-powered inverters are put into standby.");
         return 0;
     }
 
