@@ -161,6 +161,14 @@ void Stats::mqttPublish() const
     if (BatteryGuard.getCalculatedResistance().has_value()) {
         MqttSettings.publish("battery/calculated_resistance", String(BatteryGuard.getCalculatedResistance().value()));
     }
+
+    if (getNominalCapacity().has_value()) {
+        MqttSettings.publish("battery/nominalCapacity", String(*getNominalCapacity()));
+    }
+
+    if (getNominalVoltage().has_value()) {
+        MqttSettings.publish("battery/nominalVoltage", String(*getNominalVoltage()));
+    }
 }
 
 void Stats::checkSoCFullEpoch(void)
@@ -177,14 +185,6 @@ void Stats::checkSoCFullEpoch(void)
         if (!_oSoCFullEpoch.has_value() || (nowEpoch > _oSoCFullEpoch.value())) {
             _oSoCFullEpoch = nowEpoch;
         }
-    }
-
-    if (getNominalCapacity().has_value()) {
-        MqttSettings.publish("battery/nominalCapacity", String(*getNominalCapacity()));
-    }
-
-    if (getNominalVoltage().has_value()) {
-        MqttSettings.publish("battery/nominalVoltage", String(*getNominalVoltage()));
     }
 }
 
