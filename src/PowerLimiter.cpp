@@ -19,11 +19,16 @@
 #include "SunPosition.h"
 #include <LogHelper.h>
 #include "BatteryGuard.h"
-
+#include "Utils.h"
+#include "RuntimeData.h"
 
 #undef TAG
 static const char* TAG = "dynamicPowerLimiter";
 static const char* SUBTAG = "Controller";
+
+// runtime data keys
+static constexpr const char* FROM_START = "battery_from_start";
+static constexpr const char* ONE_STOP_PER_NIGHT_DONE = "battery_one_stop_per_night_done";
 
 static auto sBatteryPoweredFilter = [](PowerLimiterInverter const& inv) {
     return inv.isBatteryPowered();
@@ -51,6 +56,8 @@ void PowerLimiterClass::init(Scheduler& scheduler)
     _loopTask.setCallback(std::bind(&PowerLimiterClass::loop, this));
     _loopTask.setIterations(TASK_FOREVER);
     _loopTask.enable();
+
+    Runtime.registerProvider(this); // register for read on startup
 }
 
 frozen::string const& PowerLimiterClass::getStatusText(PowerLimiterClass::Status status) const
@@ -263,6 +270,24 @@ void PowerLimiterClass::loop()
 
         // check if we have a battery powered inverter
         if (!usesBatteryPoweredInverter()) { return BatteryState::STOP; }
+
+        // the startup requires special handling, because the voltage or the SoC may not be available at the beginning of the DPL loop.
+        // if we are in the first 15 seconds after startup, we use the buffered information from the runtime data if available and not too old.
+        // A perfect solution would require refactoring of isStopThresholdReached() and related methods to handle the state if
+        // data is not available during the startup scenario properly.
+        if (_fromStartRT && (millis() < 15 * 1000)) {
+            time_t nowEpoch;
+            Utils::getEpoch(&nowEpoch, 1);
+
+            // if the runtime epoch is more than one hour in the past, we assume that the runtime data is too old.
+            if ((nowEpoch - _lastBatteryStateSaveEpoch) <= (60 * 60)) {
+                _fromStart = _fromStartRT;
+                _oneStopPerNightDone = _oneStopPerNightDoneRT;
+            }
+        } else {
+            _fromStartRT = false;
+            _oneStopPerNightDoneRT = false;
+        }
 
         // check the stop condition
         // if the battery guard is active and provides a valid stop result, we use it.
@@ -996,20 +1021,6 @@ bool PowerLimiterClass::isGovernedBatteryPoweredInverterProducing() const
     return false;
 }
 
-void PowerLimiterClass::serializeRTD(JsonObject const& obj) const
-{
-    // Note: Up to now the PowerLimiterClass does not use a mutex
-    // Use of atomic<bool> would be an solution but I want to avoid the overhead
-    obj["battery_from_start"] = _fromStart;
-}
-
-void PowerLimiterClass::deserializeRTD(JsonObject const& obj)
-{
-    // Note: Up to now the PowerLimiterClass does not use a mutex
-    // Use of atomic<bool> would be an solution but I want to avoid the overhead
-    _fromStart =  obj["battery_from_start"] | false;
-}
-
 float PowerLimiterClass::getPrioritySoCStartThreshold(void) const
 {
     return BatteryGuard.getSoCStartThreshold().value_or(Configuration.get().PowerLimiter.BatterySocStartThreshold);
@@ -1105,4 +1116,28 @@ bool PowerLimiterClass::isConsumptionPowerChangeSufficient() {
     _lastPowerMeterUpdate = newPowerMeterUpdate;
     _lastConsumptionPower = newConsumptionPower;
     return result;
+}
+
+void PowerLimiterClass::serializeRT(JsonObject obj) const
+{
+    // Note: Up to now the PowerLimiterClass does not use a mutex
+    // As long as we read and write during startup or from the main task, we are fine.
+    obj[FROM_START] = _fromStart;
+    obj[ONE_STOP_PER_NIGHT_DONE] = _oneStopPerNightDone;
+}
+
+void PowerLimiterClass::deserializeRT(JsonObject obj)
+{
+    // Note: Up to now the PowerLimiterClass does not use a mutex
+    // As long as we read and write during startup or from the main task, we are fine.
+    // We can not use the write epoch time to determine whether the serialized data is outdated,
+    // because the system time may not be available at the time of deserialization
+    _lastBatteryStateSaveEpoch = Runtime.getWriteEpochTime();
+
+    if (obj[FROM_START].is<bool>()) {
+        _fromStartRT = obj[FROM_START];
+    }
+    if (obj[ONE_STOP_PER_NIGHT_DONE].is<bool>()) {
+        _oneStopPerNightDoneRT = obj[ONE_STOP_PER_NIGHT_DONE];
+    }
 }
