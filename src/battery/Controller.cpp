@@ -17,6 +17,9 @@
 static const char* TAG = "battery";
 static const char* SUBTAG = "Controller";
 
+// runtime data key
+static constexpr const char* FULLY_CHARGED_EPOCH = "fully_charged_epoch";
+
 Batteries::Controller Battery;
 
 namespace Batteries {
@@ -39,6 +42,8 @@ void Controller::init(Scheduler& scheduler)
     _loopTask.setCallback(std::bind(&Controller::loop, this));
     _loopTask.setIterations(TASK_FOREVER);
     _loopTask.enable();
+
+    Runtime.registerProvider(this); // read runtime data on startup
 
     this->updateSettings();
 }
@@ -166,25 +171,26 @@ float Controller::getDischargeCurrentLimit()
     return std::min(getConfiguredLimit(), getBatteryLimit());
 }
 
-void Controller::serializeRTD(JsonObject const& obj) const
+void Controller::serializeRT(JsonObject obj) const
 {
     std::lock_guard<std::mutex> lock(_mutex);
 
-    if (!_upProvider) {
-        obj["fully_charged_epoch"] = 0; // no battery in the system
-        return;
-    }
+    if (!_upProvider) { return; } // no battery, nothing to serialize
 
-    obj["fully_charged_epoch"] = _upProvider->getStats()->getSoCFullEpoch().value_or(0);
+    obj[FULLY_CHARGED_EPOCH] = _upProvider->getStats()->getSoCFullEpoch().value_or(0);
 }
 
-void Controller::deserializeRTD(JsonObject const& obj)
+void Controller::deserializeRT(JsonObject obj)
 {
+    // if runtime data is not available, we exit and use the initialization values
+    // This can happen, if the device is started for the first time or if the runtime file is corrupted
+    if (obj.isNull()) { return; }
+
     std::lock_guard<std::mutex> lock(_mutex);
 
-    if (!_upProvider) { return; } // no battery, nothing to do
+    if (!_upProvider) { return; } // no battery, nothing to deserialize
 
-    time_t fullEpoch =  obj["fully_charged_epoch"] | 0;
+    time_t fullEpoch =  obj[FULLY_CHARGED_EPOCH] | 0L;
     _upProvider->setFullyChargedEpoch(fullEpoch == 0 ? std::nullopt : std::make_optional(fullEpoch));
 }
 
