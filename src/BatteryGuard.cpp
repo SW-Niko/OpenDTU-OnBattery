@@ -58,8 +58,13 @@
 static const char* TAG = "battery";
 static const char* SUBTAG = "Guard";
 
+// runtime data key
+static constexpr const char* DC_PULSE_RESISTANCE = "dc_pulse_resistance";
+static constexpr const char* DC_PULSE_RESISTANCE_COUNTS = "dc_pulse_resistance_counts";
+static constexpr const char* FALLBACK_SOC_EPOCH = "fallback_soc_epoch";
+
 static constexpr frozen::string missing = "programmer error: missing status text";
-static constexpr char const* TEXT_NODATA = "No data";
+static constexpr const char* TEXT_NODATA = "No data";
 static constexpr float MAXIMUM_VOLTAGE_RESOLUTION = 0.020f;     // 20mV
 static constexpr float MAXIMUM_CURRENT_RESOLUTION = 0.200f;     // 200mA
 static constexpr float MAXIMUM_MEASUREMENT_TIME_PERIOD = 4000;  // 4 seconds
@@ -88,6 +93,8 @@ void BatteryGuardClass::init(Scheduler& scheduler) {
     _slowLoopTask.setIterations(TASK_FOREVER);
     _slowLoopTask.setInterval(60*1000);
     _slowLoopTask.enable();
+
+    Runtime.registerProvider(this); // read runtime data on startup
 
     updateSettings(BatteryGuardClass::UpdateSource::STARTUP);
 }
@@ -498,42 +505,44 @@ std::optional<float> BatteryGuardClass::gResistanceUsed(void) const {
 /*
  * Prepare data to be written into the runtime file
  */
-void BatteryGuardClass::serializeRTD(JsonObject const& obj) const {
+void BatteryGuardClass::serializeRT(JsonObject obj) const {
     std::shared_lock<std::shared_mutex> lock(_mutex);
 
     // DC-Pulse Resistance
-    obj["dc_pulse_resistance"] = _resistanceFromCalcAVG.getAverage();
+    obj[DC_PULSE_RESISTANCE] = _resistanceFromCalcAVG.getAverage();
     auto counts = static_cast<uint16_t>(_resistanceFromCalcAVG.getCounts());
     auto factor = static_cast<uint16_t>(_resistanceFromCalcAVG.getFactor());
     if (counts > factor) { counts = factor; } // limit the counts to the factor
-    obj["dc_pulse_resistance_counts"] = counts;
+    obj[DC_PULSE_RESISTANCE_COUNTS] = counts;
 
     // Recharge Helper, SoC fallback time
-    obj["fallback_soc_epoch"] = _fallbackSoCEpoch;
-
+    obj[FALLBACK_SOC_EPOCH] = _fallbackSoCEpoch;
 }
 
 
 /*
  * Read the data from the runtime file
  */
-void BatteryGuardClass::deserializeRTD(JsonObject const& obj) {
+void BatteryGuardClass::deserializeRT(JsonObject obj) {
+
+    // if runtime data is not available, we exit and use the initialization values
+    // This can happen, if the device is started for the first time or if the runtime file is corrupted
+    if (obj.isNull()) { return; }
+
     std::unique_lock<std::shared_mutex> lock(_mutex);
 
     // DC-Pulse Resistance
-    float resistance =  obj["dc_pulse_resistance"] | 0.0f;
-    uint16_t counts = obj["dc_pulse_resistance_counts"] | 0;
+    float resistance =  obj[DC_PULSE_RESISTANCE] | 0.0f;
+    uint16_t counts = obj[DC_PULSE_RESISTANCE_COUNTS] | 0;
     _resistanceFromCalcAVG.reset();
     if (resistance != 0.0f) {
-        auto factor = static_cast<uint16_t>(_resistanceFromCalcAVG.getFactor());
-        if (counts > factor) { counts = factor; }
         for (uint16_t idx = 0; idx < counts; ++idx) {
             _resistanceFromCalcAVG.addNumber(resistance);
         }
     }
 
     // Recharge Helper, SoC fallback time
-    _fallbackSoCEpoch = obj["fallback_soc_epoch"] | 0U;
+    _fallbackSoCEpoch = obj[FALLBACK_SOC_EPOCH] | 0L;
 }
 
 

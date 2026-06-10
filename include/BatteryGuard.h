@@ -19,9 +19,10 @@
 #include <TaskSchedulerDeclarations.h>
 #include <ArduinoJson.h>
 #include "Statistic.h"
+#include "RuntimeData.h"
 
 
-class BatteryGuardClass {
+class BatteryGuardClass : public InterfaceProviderRT {
     public:
         BatteryGuardClass() = default;
         ~BatteryGuardClass() = default;
@@ -38,7 +39,6 @@ class BatteryGuardClass {
         void updateSettings(UpdateSource const source = UpdateSource::STARTUP);
         std::optional<bool> isStopThresholdReached(bool const inStateStop);
         uint16_t calculatePowerLimit(uint16_t const requestedPower, uint16_t const nowPower, uint32_t const nowMillis);
-        void deserializeRTD(JsonObject const& obj);
 
         // public getter methods with shared lock
         void serializeInfo(JsonObject const& start) const;
@@ -49,7 +49,10 @@ class BatteryGuardClass {
         std::optional<float> getSoCStopThreshold(void) const;
         std::optional<float> getSoCStartThreshold(void) const;
         bool isUseOfExcessiveSolarPowerAllowed(void) const;
-        void serializeRTD(JsonObject const& obj) const;
+
+        String getIdRT() const override { return "battery_guard"; }
+        void serializeRT(JsonObject obj) const override;
+        void deserializeRT(JsonObject obj) override;
 
     private:
         void fastLoop(void);    // unique lock
