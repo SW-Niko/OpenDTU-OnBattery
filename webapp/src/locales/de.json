@@ -648,6 +648,8 @@
         "PowerMeterEnable": "Aktiviere Stromzähler",
         "PowerMeterSource": "Stromzählertyp",
         "pollingInterval": "Abfrageintervall",
+        "settlingTime": "Einschwingzeit",
+        "settlingTimeHint": "Die Zeit, die nach einer Änderung des Wechselrichter-Limits vergehen muss, bis wir einen neuen Wert vom Stromzähler akzeptieren.",
         "seconds": "@:base.Seconds",
         "typeMQTT": "MQTT",
         "typeSDM1ph": "SDM mit 1 Phase (SDM120/220/230)",

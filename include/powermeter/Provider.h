@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <Configuration.h>
+#include <defaults.h>
 #include <powermeter/DataPoints.h>
 
 namespace PowerMeters {
@@ -27,6 +28,10 @@ public:
 
     virtual void loop() = 0;
     virtual bool isDataValid() const;
+
+    // returns the default settling time in milliseconds
+    // see json/http/Provider.h for a provider that allows to configure the settling time
+    virtual uint32_t getSettlingTime() const { return POWERMETER_SETTLING_TIME_MS; }
 
     float getPowerTotal() const;
     uint32_t getLastUpdate() const { return _dataCurrent.getLastUpdate(); }

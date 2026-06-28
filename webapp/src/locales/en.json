@@ -649,6 +649,8 @@
         "PowerMeterEnable": "Enable Power Meter",
         "PowerMeterSource": "Power Meter Type",
         "pollingInterval": "Polling Interval",
+        "settlingTime": "Settling Time",
+        "settlingTimeHint": "The time that must pass after a change to the inverter limit before we accept a new value from the power meter.",
         "seconds": "@:base.Seconds",
         "typeMQTT": "MQTT",
         "typeSDM1ph": "SDM for 1 phase (SDM120/220/230)",

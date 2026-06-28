@@ -206,11 +206,11 @@ void PowerLimiterClass::loop()
     // if the power meter is being used, i.e., if its data is valid, we want to
     // wait for a new reading after adjusting the inverter limit. otherwise, we
     // proceed as we will use a fallback limit independent of the power meter.
-    // the power meter reading is expected to be at most 2 seconds old when it
-    // arrives. this can be the case for readings provided by networked meter
+    // the power meter reading is expected to be at most a settling time (default 2 sec)
+    // old when it arrives. this can be the case for readings provided by networked meter
     // readers, where a packet needs to travel through the network for some
     // time after the actual measurement was done by the reader.
-    if (PowerMeter.isDataValid() && PowerMeter.getLastUpdate() <= (latestInverterStats + 2000)) {
+    if (PowerMeter.isDataValid() && PowerMeter.getLastUpdate() <= (latestInverterStats + PowerMeter.getSettlingTime())) {
         return announceStatus(Status::PowerMeterPending);
     }
 

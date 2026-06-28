@@ -28,6 +28,9 @@ public:
     void loop() final;
     bool isDataValid() const final;
 
+    // returns the settling time in milliseconds
+    uint32_t getSettlingTime() const final { return _cfg.SettlingTimeMs; }
+
     using poll_result_t = std::variant<DataPointContainer, String>;
     poll_result_t poll();
 
