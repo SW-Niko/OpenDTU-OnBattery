@@ -165,6 +165,18 @@
                             :postfix="$t('powermeteradmin.seconds')"
                             wide
                         />
+
+                        <InputElement
+                            :label="$t('powermeteradmin.settlingTime')"
+                            v-model="httpJsonSettlingTimeSeconds"
+                            type="number"
+                            min="1.0"
+                            max="15"
+                            step="0.1"
+                            :postfix="$t('powermeteradmin.seconds')"
+                            :tooltip="$t('powermeteradmin.settlingTimeHint')"
+                            wide
+                        />
                     </CardElement>
 
                     <CardElement
@@ -378,6 +390,14 @@ export default defineComponent({
             },
             set(value: number) {
                 this.powerMeterConfigList.http_json.polling_interval_ms = value * 1000;
+            },
+        },
+        httpJsonSettlingTimeSeconds: {
+            get(): number {
+                return this.powerMeterConfigList.http_json.settling_time_ms / 1000;
+            },
+            set(value: number) {
+                this.powerMeterConfigList.http_json.settling_time_ms = value * 1000;
             },
         },
     },

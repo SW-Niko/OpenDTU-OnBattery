@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include <powermeter/Controller.h>
 #include <Configuration.h>
+#include <defaults.h>
 #include <powermeter/json/http/Provider.h>
 #include <powermeter/json/mqtt/Provider.h>
 #include <powermeter/sdm/serial/Provider.h>
@@ -86,6 +87,13 @@ bool Controller::isDataValid() const
     std::lock_guard<std::mutex> l(_mutex);
     if (!_upProvider) { return false; }
     return _upProvider->isDataValid();
+}
+
+uint32_t Controller::getSettlingTime() const
+{
+    std::lock_guard<std::mutex> l(_mutex);
+    if (!_upProvider) { return POWERMETER_SETTLING_TIME_MS; }
+    return _upProvider->getSettlingTime();
 }
 
 void Controller::loop()

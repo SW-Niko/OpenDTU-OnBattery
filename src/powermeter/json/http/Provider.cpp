@@ -141,6 +141,7 @@ void Provider::pollingLoop()
         // periodic information output
         if (pollEnd - lastPrint > 30 * 1000) {
             lastPrint = pollEnd;
+            DTU_LOGI("Configured interval time: %ums, Settling time: %ums", _cfg.PollingIntervalMs, _cfg.SettlingTimeMs);
             DTU_LOGI("Average interval time: %ums, [Min: %u, Max: %u]",
                 avgIntervalTime.getAverage(), avgIntervalTime.getMin(), avgIntervalTime.getMax());
             DTU_LOGI("Average poll time: %ums, [Min: %u, Max: %u]",

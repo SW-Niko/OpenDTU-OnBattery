@@ -17,6 +17,7 @@ public:
     float getPowerTotal() const;
     uint32_t getLastUpdate() const;
     bool isDataValid() const;
+    uint32_t getSettlingTime() const;
 
 private:
     void loop();

@@ -103,6 +103,7 @@ void ConfigurationClass::serializePowerMeterSerialSdmConfig(PowerMeterSerialSdmC
 void ConfigurationClass::serializePowerMeterHttpJsonConfig(PowerMeterHttpJsonConfig const& source, JsonObject& target, bool includeCredentials)
 {
     target["polling_interval_ms"] = source.PollingIntervalMs;
+    target["settling_time_ms"] = source.SettlingTimeMs;
     target["individual_requests"] = source.IndividualRequests;
 
     JsonArray values = target["values"].to<JsonArray>();
@@ -576,6 +577,8 @@ void ConfigurationClass::deserializePowerMeterHttpJsonConfig(JsonObject const& s
 {
     target.PollingIntervalMs = source["polling_interval_ms"] | POWERMETER_POLLING_INTERVAL * 1000;
     target.PollingIntervalMs = std::clamp(target.PollingIntervalMs, 100u, 15000u);
+    target.SettlingTimeMs = source["settling_time_ms"] | POWERMETER_SETTLING_TIME_MS;
+    target.SettlingTimeMs = std::clamp(target.SettlingTimeMs, 1000u, 15000u);
     target.IndividualRequests = source["individual_requests"] | false;
 
     JsonArray values = source["values"].as<JsonArray>();
