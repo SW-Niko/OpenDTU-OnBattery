@@ -39,16 +39,19 @@ class BatteryGuardClass : public InterfaceProviderRT {
         void updateSettings(UpdateSource const source = UpdateSource::STARTUP);
         std::optional<bool> isStopThresholdReached(bool const inStateStop);
         uint16_t calculatePowerLimit(uint16_t const requestedPower, uint16_t const nowPower, uint32_t const nowMillis);
+        void calculateRechargeHelper(void);
 
         // public getter methods with shared lock
         void serializeInfo(JsonObject const& start) const;
         std::optional<float> getCalculatedResistance(void) const;
+        std::optional<float> getResistance(void) const;
         std::optional<float> getOpenCircuitVoltage(void) const;
         std::optional<float> getVoltageStopThreshold(void) const;
         std::optional<float> getVoltageStartThreshold(void) const;
         std::optional<float> getSoCStopThreshold(void) const;
         std::optional<float> getSoCStartThreshold(void) const;
         bool isUseOfExcessiveSolarPowerAllowed(void) const;
+        bool isRechargeHelperInStateStart(void) const { std::shared_lock lock(_mutex); return (_hState == HState::START); }
 
         String getIdRT() const override { return "battery_guard"; }
         void serializeRT(JsonObject obj) const override;
@@ -167,7 +170,6 @@ class BatteryGuardClass : public InterfaceProviderRT {
         // Recharge Helper: private members and methods
         enum class HState : uint8_t { OFF, ERROR, START, IDLE, STAGE1, STAGE2, STAGE3 };
 
-        void calculateRechargeHelper(time_t const fullEpoch, time_t const nowEpoch);
         void resetRechargeHelper(void);
         bool gRechargeTimeTrigger(time_t const nowEpoch);
         bool thresholdsValid(float startMinDPL, float stopMinDPL, float startMax, float stopMax) const;

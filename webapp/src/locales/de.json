@@ -1401,7 +1401,7 @@
         "LimitInfo": "Die 'Batteriestrom-Kompensation' berechnet mit Hilfe des Batterie DC-Pulse Widerstandes und des Batteriestroms kontinuierlich die Leerlaufspannung der Batterie. Diese wird als Vergleichswert für sämtliche Spannungsschwellwerte verwendet und kompensiert damit die durch Lade- und Entladeströme verursachten Spannungsänderungen. Das Aktivieren der 'Batteriestrom-Kompensation' deaktiviert automatisch die 'DPL-Lastkorrektur'.",
         "RechargeConfiguration": "Auflade Helfer",
         "RechargeHelperEnabled": "Aktiviere Auflade Helfer",
-        "RechargeHelperExcessiveDisabled": "Deaktiviere Überschüssige Solarenergie",
+        "RechargeHelperExcessiveDisabled": "Verwende keine überschüssige Solarenergie",
         "RechargeHelperExcessiveHint": "Nach der 'Idle Zeitdauer' werden Funktionen, die überschüssige Solarenergie an der Batterie vorbeileiten, vorübergehend deaktiviert. Dazu gehören z.B. 'Full Solar-Passthrough' und 'Surplus'.",
         "RechargeHelperUseVoltage": "Verwende Spannungs-Schwellwerte",
         "RechargeHelperUseVoltageHint": "Deaktiviere diesen Schalter, um Batterie State of Charge (SoC) Schwellwerte zu konfigurieren (nicht empfohlen, da der SoC-Wert häufig ungenau ist). ACHTUNG: Wenn der 'Stop-Voltage Limiter' aktiviert ist, kann der 'Auflade Helfer' nur mit Spannungs-Schwellwerten betrieben werden.",
