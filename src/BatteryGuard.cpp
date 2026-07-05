@@ -237,28 +237,20 @@ void BatteryGuardClass::slowLoop(void) {
 
     if (!_useBatteryGuard ) { return; } // fast exit to avoid locking
 
-    if (_useCurrentCompensation || _useRechargeHelper) {
-
-        // read external state without holding our mutex
-        auto epochFull = Battery.getStats()->getSoCFullEpoch().value_or(0);
-        time_t epochNow;
-        if (!Utils::getEpoch(&epochNow, 5)) { epochNow = 0 ; }
+    if (_useCurrentCompensation) {
 
         std::unique_lock<std::shared_mutex> lock(_mutex);
 
-        if (_useCurrentCompensation) {
-            if ((millis() - _lastOCMillis) > OUTDATED_TIME) {
-                _openCircuitVoltageAVG.reset();
-                _oState = OState::ERROR;
-                if (_useStopVoltageLimiter) { _lState = LState::ERROR; }
-            }
+        if ((millis() - _lastOCMillis) > OUTDATED_TIME) {
+            _openCircuitVoltageAVG.reset();
+            _oState = OState::ERROR;
+            if (_useStopVoltageLimiter) { _lState = LState::ERROR; }
         }
-
-        if (_useRechargeHelper) {
-            calculateRechargeHelper(epochFull, epochNow);
-        }
-
     } // end of unique lock
+
+    if (_useRechargeHelper) {
+        calculateRechargeHelper();
+    }
 
     if (DTU_LOG_IS_DEBUG) {
 
@@ -487,6 +479,17 @@ std::optional<float> BatteryGuardClass::getCalculatedResistance(void) const {
     return std::nullopt;
 }
 
+
+/*
+ * The battery internal resistance or nullopt if value is not valid
+ */
+std::optional<float> BatteryGuardClass::getResistance(void) const {
+    if (!_useCurrentCompensation) { return std::nullopt; } // fast exit to avoid locking
+
+    std::shared_lock<std::shared_mutex> lock(_mutex);
+
+    return gResistanceUsed();
+}
 
 /*
  * The battery internal resistance, calculated or configured or nullopt if neither value is valid
@@ -1078,7 +1081,16 @@ frozen::string const& BatteryGuardClass::gLimiterStateText(BatteryGuardClass::LS
  * Stage 2: We reduce the maximum inverter power. Change every day at 12:00
  * Stage 3: We keep the maximum start/stop-thresholds and the minimum inverter power
  */
-void BatteryGuardClass::calculateRechargeHelper(time_t const fullEpoch, time_t const nowEpoch) {
+void BatteryGuardClass::calculateRechargeHelper(void) {
+
+    if (!_useRechargeHelper) { return; } // fast exit to avoid locking
+
+    // read external state without holding the mutex
+    auto fullEpoch = Battery.getStats()->getSoCFullEpoch().value_or(0);
+    time_t nowEpoch;
+    if (!Utils::getEpoch(&nowEpoch, 5)) { nowEpoch = 0 ; }
+
+    std::unique_lock<std::shared_mutex> lock(_mutex);
 
     if (_hState == HState::OFF) { return; }
 

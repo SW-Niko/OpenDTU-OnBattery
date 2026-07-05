@@ -175,6 +175,12 @@ void PowerLimiterClass::loop()
         return announceStatus(Status::ConfigReload);
     }
 
+    // if the 'recharge helper' is in start state (system startup or configuration update)
+    // we have to recalculate the thresholds before we use them inside the DPL loop.
+    if (BatteryGuard.isRechargeHelperInStateStart()) {
+        BatteryGuard.calculateRechargeHelper();
+    }
+
     if (!config.PowerLimiter.Enabled) {
         return announceStatus(Status::DisabledByConfig);
     }
@@ -392,6 +398,10 @@ void PowerLimiterClass::loop()
                 dcVoltage, _loadCorrectedVoltage,
                 getBatteryInvertersOutputAcWatts(),
                 config.PowerLimiter.VoltageLoadCorrectionFactor);
+
+        DTU_LOGD("battery voltage %.2f V, open-circuit voltage %.2f V, dc-pulse-resistance %.5f Ohm",
+                dcVoltage, BatteryGuard.getOpenCircuitVoltage().value_or(0.0f),
+                BatteryGuard.getResistance().value_or(0.0f));
 
         DTU_LOGD("battery discharge %s, start %.2f V or %.1f %%, stop %.2f V or %.1f %%",
                 (((_batteryState == BatteryState::DISCHARGE_ALLOWED) || (_batteryState == BatteryState::DISCHARGE_NIGHT))?"allowed":
