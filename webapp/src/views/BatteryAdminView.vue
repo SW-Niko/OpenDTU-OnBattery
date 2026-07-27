@@ -562,7 +562,7 @@
                             v-model="batteryConfigList.zendure.app_key"
                             type="text"
                             minlength="8"
-                            maxlength="8"
+                            maxlength="16"
                             :key="$route.fullPath"
                         />
                         <InputElement
@@ -579,7 +579,8 @@
                                 <div
                                     v-if="
                                         batteryConfigList.zendure.secret.length != 32 ||
-                                        batteryConfigList.zendure.app_key.length != 8
+                                        batteryConfigList.zendure.app_key.length < 8 ||
+                                        batteryConfigList.zendure.app_key.length > 16
                                     "
                                     class="alert alert-warning"
                                     role="alert"
