@@ -64,6 +64,7 @@ void Provider::loop()
 
     std::unique_lock<std::mutex> lock(_pollingMutex);
     _stopPolling = false;
+    _pausePolling = false;
     lock.unlock();
 
     uint32_t constexpr stackSize = 6144;
@@ -91,21 +92,45 @@ void Provider::pollingLoop()
     float lastTotalPower = 0.0f;
     WeightedAVG<uint32_t> avgPollTime{50};     // average poll time
     WeightedAVG<uint32_t> avgIntervalTime{50}; // average interval time
+    WeightedAVG<uint32_t> avgPauseTime{50};    // average pause time
+    bool usePauseInterval  = false;
 
     while (!_stopPolling) {
         uint32_t elapsedMillis = millis() - _lastPoll;
         uint32_t intervalMillis = _cfg.PollingIntervalMs;
-        if (_lastPoll > 0 && elapsedMillis < intervalMillis) {
-            auto sleepMs = intervalMillis - elapsedMillis;
-            sleepMs = std::max(sleepMs, intervalMillis / 2); // to avoid too fast polling
-            _cv.wait_for(lock, std::chrono::milliseconds(sleepMs),
-                    [this] { return _stopPolling; }); // releases the mutex
+
+        if (_pausePolling || ((_lastPoll > 0) && (elapsedMillis < intervalMillis))) {
+
+            auto sleepMs = _pausePolling ? _pauseDuration : intervalMillis - elapsedMillis;
+            if (!_pausePolling) {
+                sleepMs = std::max(sleepMs, intervalMillis / 2); // to avoid too fast polling
+            } else {
+                usePauseInterval = true;
+            }
+            const bool triggered = _cv.wait_for(lock, std::chrono::milliseconds(sleepMs),
+                [this] { return (_stopPolling || _trigger); }); // releases the mutex
+
+            _trigger = false;
+
+            // if the wait was not triggered and we are in a pause, reset the pause flag
+            // to avoid being stuck in a pause indefinitely
+            if (!triggered && _pausePolling) { _pausePolling = false; }
             continue;
         }
 
-        // record the average interval time
+        // to avoid endless pause, reset the pause flag before starting the next poll
+        _pausePolling = false;
+
+        // record the average interval or pause time
         uint32_t pollStart = millis();
-        if (_lastPoll > 0) { avgIntervalTime.addNumber(pollStart - _lastPoll); }
+        if (_lastPoll > 0) {
+            if (usePauseInterval) {
+                avgPauseTime.addNumber(pollStart - _lastPoll);
+            } else {
+                avgIntervalTime.addNumber(pollStart - _lastPoll);
+            }
+        }
+        usePauseInterval = false;
 
         _lastPoll = pollStart; // used for calculating the next polling interval
 
@@ -139,13 +164,15 @@ void Provider::pollingLoop()
         dataCounter++;
 
         // periodic information output
-        if (pollEnd - lastPrint > 30 * 1000) {
+        if (DTU_LOG_IS_INFO && (pollEnd - lastPrint > 30 * 1000)) {
             lastPrint = pollEnd;
             DTU_LOGI("Configured interval time: %ums, Settling time: %ums", _cfg.PollingIntervalMs, _cfg.SettlingTimeMs);
             DTU_LOGI("Average interval time: %ums, [Min: %u, Max: %u]",
                 avgIntervalTime.getAverage(), avgIntervalTime.getMin(), avgIntervalTime.getMax());
             DTU_LOGI("Average poll time: %ums, [Min: %u, Max: %u]",
                 avgPollTime.getAverage(), avgPollTime.getMin(), avgPollTime.getMax());
+            DTU_LOGI("Average pause time: %ums, [Min: %u, Max: %u]",
+                avgPauseTime.getAverage(), avgPauseTime.getMin(), avgPauseTime.getMax());
 
             if (dataCounter >= 10) {
                 DTU_LOGI("Http/Poll errors: %.1f%% [%u of %u polls]",
@@ -250,6 +277,35 @@ bool Provider::isDataValid() const
 
     // consider data valid if last update was within 3 polling intervals, but at least 5 seconds
     return getLastUpdate() > 0 && (age < std::max(5000u, 3 * _cfg.PollingIntervalMs));
+}
+
+void Provider::setPause(uint32_t duration)
+{
+    {
+        std::lock_guard<std::mutex> lock(_pollingMutex);
+
+        // if the polling task is not running, we don't need to notify it
+        if (_stopPolling || (_taskHandle == nullptr)) {
+            DTU_LOGE("polling task is not running or current pause not finished");
+            return;
+        }
+
+        if (duration == 0) {
+            if (!_pausePolling) { return; } // if we are not currently paused, no need to resume
+            _pausePolling = false;
+            DTU_LOGD("resuming from pause");
+        } else {
+            if (_pausePolling) { return; } // if we are already paused, no need to pause again
+            _pausePolling = true;
+            duration = std::clamp(duration, 1u, 60u * 1000u);
+            _pauseDuration = duration;
+            DTU_LOGD("pause for a duration of: %u", _pauseDuration);
+        }
+        _trigger = true;
+    }
+
+    // notify the polling task
+    _cv.notify_all();
 }
 
 } // namespace PowerMeters::Json::Http

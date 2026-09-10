@@ -31,6 +31,13 @@ public:
     // returns the settling time in milliseconds
     uint32_t getSettlingTime() const final { return _cfg.SettlingTimeMs; }
 
+    // pause the power measurement for the specified duration in milliseconds
+    // duration = 0 will stop the pause immediately
+    void setPause(uint32_t duration) final;
+
+    // the pause feature is supported by the current provider
+    bool isPauseSupported() const final { return true; }
+
     using poll_result_t = std::variant<DataPointContainer, String>;
     poll_result_t poll();
 
@@ -46,7 +53,10 @@ private:
     std::array<std::unique_ptr<HttpGetter>, POWERMETER_HTTP_JSON_MAX_VALUES> _httpGetters;
 
     TaskHandle_t _taskHandle = nullptr;
-    bool _stopPolling;
+    bool _stopPolling = false;
+    bool _pausePolling = false;
+    uint32_t _pauseDuration = 0;
+    bool _trigger = false;
     mutable std::mutex _pollingMutex;
     std::condition_variable _cv;
 };

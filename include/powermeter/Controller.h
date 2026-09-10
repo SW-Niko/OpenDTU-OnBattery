@@ -17,7 +17,18 @@ public:
     float getPowerTotal() const;
     uint32_t getLastUpdate() const;
     bool isDataValid() const;
+
+    // get the configured settling time
     uint32_t getSettlingTime() const;
+
+    // the power measurement will be paused for the specified duration in milliseconds.
+    void setPause(uint32_t duration) const;
+
+    // stop the pause and resume to normal operation (before the specified duration elapses).
+    void stopPause() const;
+
+    // check if the pause feature is supported by the current provider
+    bool isPauseSupported() const;
 
 private:
     void loop();
