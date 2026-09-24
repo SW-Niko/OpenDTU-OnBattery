@@ -96,6 +96,27 @@ uint32_t Controller::getSettlingTime() const
     return _upProvider->getSettlingTime();
 }
 
+void Controller::setPause(uint32_t duration) const
+{
+    std::lock_guard<std::mutex> l(_mutex);
+    if (!_upProvider) { return; }
+    _upProvider->setPause(duration);
+}
+
+void Controller::stopPause() const
+{
+    std::lock_guard<std::mutex> l(_mutex);
+    if (!_upProvider) { return; }
+    _upProvider->setPause(0u);
+}
+
+bool Controller::isPauseSupported() const
+{
+    std::lock_guard<std::mutex> l(_mutex);
+    if (!_upProvider) { return false; }
+    return _upProvider->isPauseSupported();
+}
+
 void Controller::loop()
 {
     std::lock_guard<std::mutex> lock(_mutex);
