@@ -33,6 +33,13 @@ public:
     // see json/http/Provider.h for a provider that allows to configure the settling time
     virtual uint32_t getSettlingTime() const { return POWERMETER_SETTLING_TIME_MS; }
 
+    // default implementation does nothing
+    // see json/http/Provider.h for a provider that implements the pause feature
+    virtual void setPause(uint32_t duration) { }
+
+    // check if the pause feature is supported by the current provider
+    virtual bool isPauseSupported() const { return false; }
+
     float getPowerTotal() const;
     uint32_t getLastUpdate() const { return _dataCurrent.getLastUpdate(); }
     void mqttLoop() const;
