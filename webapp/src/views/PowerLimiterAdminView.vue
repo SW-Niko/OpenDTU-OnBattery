@@ -168,6 +168,16 @@
                         />
 
                         <InputElement
+                            v-if="inv.power_source == 0"
+                            :label="$t('powerlimiteradmin.UseATF')"
+                            :tooltip="$t('powerlimiteradmin.UseATFHint')"
+                            v-model="inv.use_atf"
+                            type="checkbox"
+                            :disabled="isATFFull && !inv.use_atf"
+                            wide
+                        />
+
+                        <InputElement
                             v-if="inv.power_source != 0 && inverterSupportsOverscaling(inv.serial)"
                             :label="$t('powerlimiteradmin.UseOverscaling')"
                             :tooltip="$t('powerlimiteradmin.UseOverscalingHint')"
@@ -641,6 +651,9 @@ export default defineComponent({
         hasBatteryInterface(): boolean {
             const meta = this.powerLimiterMetaData;
             return meta.battery_enabled && this.governingBatteryPoweredInverters;
+        },
+        isATFFull(): boolean {
+            return this.governedBatteryPoweredInverters.filter((inv) => inv.use_atf).length > 3;
         },
     },
     methods: {
