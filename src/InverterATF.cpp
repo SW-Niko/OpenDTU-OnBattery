@@ -734,24 +734,25 @@ void InverterATF::printATFReport(void) const {
 
     DTU_LOGV("");
     DTU_LOGV("ATF data details");
-    size_t columnWidth = 5;
-    size_t columnMaxNr = 20;
-    size_t rowMaxNr = 5;
-    char cBuffer[columnMaxNr * columnWidth + 10];
+    size_t constexpr kATFColumnWidth = 5;
+    size_t constexpr kATFColumnMaxNr = 20;
+    size_t constexpr kATFRowMaxNr = 5;
+    size_t constexpr kATFBufferSize = kATFColumnMaxNr * kATFColumnWidth + 10;
+    char cBuffer[kATFBufferSize];
 
-    for (auto row = 0; row < rowMaxNr; ++row) {
+    for (auto row = 0; row < kATFRowMaxNr; ++row) {
         for (auto kind = 0; kind < 2; ++kind) {
             char *cBuf = cBuffer;
             auto remaining = sizeof(cBuffer);
-            for (auto idx = 1; idx <= columnMaxNr; ++idx) {
-                auto globalIdx = row * columnMaxNr + idx;
+            for (auto idx = 1; idx <= kATFColumnMaxNr; ++idx) {
+                auto globalIdx = row * kATFColumnMaxNr + idx;
                 if (globalIdx >= _size) break;
 
                 if (kind == 0) { snprintf(cBuf, remaining, "%4i%%", static_cast<int>(globalIdx)); } // Limit
                 else { snprintf(cBuf, remaining, "%5.0f", _realPower[globalIdx]); } // Power
 
-                cBuf += columnWidth;
-                remaining -= columnWidth;
+                cBuf += kATFColumnWidth;
+                remaining -= kATFColumnWidth;
             }
             DTU_LOGV("%s", cBuffer);
         }
@@ -759,24 +760,25 @@ void InverterATF::printATFReport(void) const {
 
     DTU_LOGD("");
     DTU_LOGD("Flicker zone details");
-    columnWidth = 6;
-    columnMaxNr = 11;
-    rowMaxNr = 2;
-    char cBufferFZ[columnMaxNr * columnWidth + 10];
-    for (auto row = 0; row < rowMaxNr; ++row) {
+    size_t constexpr kFZColumnWidth = 6;
+    size_t constexpr kFZColumnMaxNr = 11;
+    size_t constexpr kFZRowMaxNr = 2;
+    size_t constexpr kFZBufferSize = kFZColumnMaxNr * kFZColumnWidth + 10;
+    char cBufferFZ[kFZBufferSize];
+    for (auto row = 0; row < kFZRowMaxNr; ++row) {
         for (auto kind = 0; kind < 3; ++kind) {
             char *cBuf = cBufferFZ;
             auto remaining = sizeof(cBufferFZ);
-            for (auto idx = 0; idx < columnMaxNr; ++idx) {
-                auto index = row * columnMaxNr + idx;
+            for (auto idx = 0; idx < kFZColumnMaxNr; ++idx) {
+                auto index = row * kFZColumnMaxNr + idx;
                 if (index >= _sizeFZ) break;
 
                 if (kind == 0) { snprintf(cBuf, remaining, "%5.1f%%", indexToLimit(index)); } // Limit
                 else if (kind == 1) { snprintf(cBuf, remaining, "%6.1f", _maxFZ[index]); } // Maximum FZ value
                 else if (kind == 2) { snprintf(cBuf, remaining, "%6.1f", _minFZ[index]); } // Minimum FZ value
 
-                cBuf += columnWidth;
-                remaining -= columnWidth;
+                cBuf += kFZColumnWidth;
+                remaining -= kFZColumnWidth;
             }
             DTU_LOGD("%s", cBufferFZ);
         }
