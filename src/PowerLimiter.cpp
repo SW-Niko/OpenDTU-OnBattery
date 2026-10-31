@@ -844,14 +844,15 @@ uint16_t PowerLimiterClass::calcPowerBusUsage(uint16_t powerRequested) const
         }
     }
 
-    if (!Surplus.isSurplusEnabled() && isFullSolarPassthroughActive()) {
-        // we use the full-solar-passthrough power to determine how much power
-        // the battery-powered inverters shall draw from the DC power bus.
+    // solar-passthrough can not be used if surplus is active
+    if (!Surplus.isSurplusActive()) {
         solarOutputDc = getSolarPassthroughPower();
         solarOutputAc = dcPowerBusToInverterAc(solarOutputDc);
-        if (solarOutputAc > powerRequested) {
+
+        // full-solar-passthrough can not be used if surplus is enabled
+        if (isFullSolarPassthroughActive() && solarOutputAc > powerRequested && !Surplus.isSurplusEnabled()) {
             DTU_LOGD("using %u/%u W DC/AC from DC power bus (full solar-passthrough)",
-                solarOutputDc, solarOutputAc);
+                    solarOutputDc, solarOutputAc);
 
             return solarOutputAc;
         }
