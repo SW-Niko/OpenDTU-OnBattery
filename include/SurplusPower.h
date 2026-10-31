@@ -60,6 +60,7 @@ class SurplusClass {
 
         // public getter methods with shared lock
         bool isSurplusEnabled(void) const { std::shared_lock<std::shared_mutex> lock(_mutex); return _useSurplus && (_stageIEnabled || _stageIIEnabled); }
+        bool isSurplusActive(void) const { std::shared_lock<std::shared_mutex> lock(_mutex); return _stageIActive || _stageIIActive; }
         void serializeInfo(JsonObject const& start) const;
 
     private:
