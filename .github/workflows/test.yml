@@ -11,6 +11,7 @@ on:
     branches:
       - master
       - development
+      - development-nico
     tags-ignore:
       - 'v**'
   pull_request:
