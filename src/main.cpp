@@ -37,6 +37,7 @@
 #include <TaskScheduler.h>
 #include <esp_heap_caps.h>
 #include "RuntimeData.h"
+#include "modbus/ModbusServer.h"
 #include "BatteryGuard.h"
 #include "SurplusPower.h"
 
@@ -155,9 +156,10 @@ void setup()
     PowerLimiter.init(scheduler);
     GridCharger.init(scheduler);
     Battery.init(scheduler);
+    ModbusServer.init(scheduler);
     BatteryGuard.init(scheduler);
     Surplus.init(scheduler);
-    // ... and here (before RuntimeData)
+    // ... and here
 
     Runtime.read(); // Read runtime values from all components that are registered to read on startup
 

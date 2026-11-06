@@ -46,6 +46,7 @@ private:
 
     uint8_t _moduleCountBlockingCharge;
     uint8_t _moduleCountBlockingDischarge;
+    int _moduleCountHeating = -1;
 
     float _availableCapacity;
     uint8_t _capacityPrecision = 0; // decimal places

@@ -57,6 +57,19 @@
 #define ZENDURE_MAX_SECRET_STRLEN   32
 #define ZENDURE_MAX_APPKEY_STRLEN   16
 
+struct MODBUS_SERVER_INVERTER_CONFIG_T {
+    uint64_t Serial;
+    uint8_t UnitId;
+};
+using ModbusServerInverterConfig = struct MODBUS_SERVER_INVERTER_CONFIG_T;
+
+struct MODBUS_SERVER_CONFIG_T {
+    bool Enabled;
+    uint16_t Port;
+    ModbusServerInverterConfig Inverter[INV_MAX_COUNT];
+};
+using ModbusServerConfig = struct MODBUS_SERVER_CONFIG_T;
+
 struct CHANNEL_CONFIG_T {
     uint16_t MaxChannelPower;
     char Name[CHAN_MAX_NAME_STRLEN];
@@ -388,6 +401,9 @@ struct CONFIG_T {
         bool Dhcp;
         char Hostname[WIFI_MAX_HOSTNAME_STRLEN + 1];
         uint32_t ApTimeout;
+        bool RescanEnabled;
+        uint16_t RescanInterval; // minutes
+        uint8_t RescanThreshold; // dB
     } WiFi;
 
     struct {
@@ -496,6 +512,8 @@ struct CONFIG_T {
 
     GridChargerConfig GridCharger;
 
+    ModbusServerConfig ModbusServer;
+
     BatteryGuardConfig BatteryGuard;
 
     INVERTER_CONFIG_T Inverter[INV_MAX_COUNT];
@@ -554,6 +572,7 @@ public:
     static void serializeGridChargerCanConfig(GridChargerCanConfig const& source, JsonObject& target);
     static void serializeGridChargerHuaweiConfig(GridChargerHuaweiConfig const& source, JsonObject& target);
     static void serializeGridChargerTruckiConfig(GridChargerTruckiConfig const& source, JsonObject& target);
+    static void serializeModbusServerConfig(ModbusServerConfig const& source, JsonObject& target);
     static void serializeBatteryGuardConfig(BatteryGuardConfig const& source, PowerLimiterConfig const& sourceP, JsonObject& target);
 
     static void deserializeHttpRequestConfig(JsonObject const& source_http_config, HttpRequestConfig& target);
@@ -573,6 +592,7 @@ public:
     static void deserializeGridChargerCanConfig(JsonObject const& source, GridChargerCanConfig& target);
     static void deserializeGridChargerHuaweiConfig(JsonObject const& source, GridChargerHuaweiConfig& target);
     static void deserializeGridChargerTruckiConfig(JsonObject const& source, GridChargerTruckiConfig& target);
+    static void deserializeModbusServerConfig(JsonObject const& source, ModbusServerConfig& target);
     static void deserializeBatteryGuardConfig(JsonObject const& source, BatteryGuardConfig& target);
 
 private:

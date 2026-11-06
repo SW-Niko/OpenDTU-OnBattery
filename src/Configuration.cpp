@@ -19,6 +19,7 @@ CONFIG_T config;
 static std::condition_variable sWriterCv;
 static std::mutex sWriterMutex;
 static unsigned sWriterCount = 0;
+static bool sWriterActive = false;
 
 void ConfigurationClass::init(Scheduler& scheduler)
 {
@@ -301,6 +302,23 @@ void ConfigurationClass::serializeGridChargerTruckiConfig(GridChargerTruckiConfi
     target["password"] = source.Password;
 }
 
+void ConfigurationClass::serializeModbusServerConfig(ModbusServerConfig const& source, JsonObject& target)
+{
+    char buf[sizeof(uint64_t) * 8 + 1];
+    target["enabled"] = source.Enabled;
+    target["port"] = source.Port;
+    JsonArray inverters = target["inverter"].to<JsonArray>();
+    for (size_t i = 0; i < INV_MAX_COUNT; ++i) {
+        if (source.Inverter[i].Serial == 0ULL) { break; }
+        JsonObject inv = inverters.add<JsonObject>();
+        snprintf(buf, sizeof(buf), "%0x%08x",
+            static_cast<uint32_t>((source.Inverter[i].Serial >> 32) & 0xFFFFFFFF),
+            static_cast<uint32_t>(source.Inverter[i].Serial & 0xFFFFFFFF));
+        inv["serial"] = buf;
+        inv["unit_id"] = source.Inverter[i].UnitId;
+    }
+}
+
 void ConfigurationClass::serializeBatteryGuardConfig(BatteryGuardConfig const& source, PowerLimiterConfig const& sourceP, JsonObject& target)
 {
     target["enabled"] = source.Enabled;
@@ -348,6 +366,9 @@ bool ConfigurationClass::write()
     wifi["dhcp"] = config.WiFi.Dhcp;
     wifi["hostname"] = config.WiFi.Hostname;
     wifi["aptimeout"] = config.WiFi.ApTimeout;
+    wifi["rescan_enabled"] = config.WiFi.RescanEnabled;
+    wifi["rescan_interval"] = config.WiFi.RescanInterval;
+    wifi["rescan_threshold"] = config.WiFi.RescanThreshold;
 
     JsonObject mdns = doc["mdns"].to<JsonObject>();
     mdns["enabled"] = config.Mdns.Enabled;
@@ -512,6 +533,9 @@ bool ConfigurationClass::write()
     JsonObject gridcharger_trucki = gridcharger["trucki"].to<JsonObject>();
     serializeGridChargerTruckiConfig(config.GridCharger.Trucki, gridcharger_trucki);
 
+    JsonObject modbusServer = doc["modbusserver"].to<JsonObject>();
+    serializeModbusServerConfig(config.ModbusServer, modbusServer);
+
     JsonObject batteryGuard = doc["batteryguard"].to<JsonObject>();
     serializeBatteryGuardConfig(config.BatteryGuard, config.PowerLimiter, batteryGuard);
 
@@ -537,7 +561,8 @@ void ConfigurationClass::deserializeHttpRequestConfig(JsonObject const& source_h
     strlcpy(target.Password, source_http_config["password"] | "", sizeof(target.Password));
     strlcpy(target.HeaderKey, source_http_config["header_key"] | "", sizeof(target.HeaderKey));
     strlcpy(target.HeaderValue, source_http_config["header_value"] | "", sizeof(target.HeaderValue));
-    target.Timeout = source_http_config["timeout"] | HTTP_REQUEST_TIMEOUT_MS;
+    target.Timeout = std::max<uint16_t>(source_http_config["timeout"] | HTTP_REQUEST_TIMEOUT_MS,
+            HTTP_REQUEST_TIMEOUT_MIN_MS);
 }
 
 void ConfigurationClass::deserializeSolarChargerConfig(JsonObject const& source, SolarChargerConfig& target)
@@ -788,6 +813,43 @@ void ConfigurationClass::deserializeGridChargerTruckiConfig(JsonObject const& so
     strlcpy(target.Password, source["password"] | "", sizeof(target.Password));
 }
 
+void ConfigurationClass::deserializeModbusServerConfig(JsonObject const& source, ModbusServerConfig& target)
+{
+    target.Enabled = source["enabled"] | MODBUS_SERVER_ENABLED;
+    target.Port = source["port"] | MODBUS_SERVER_PORT;
+    JsonArrayConst inverters = source["inverter"].as<JsonArrayConst>();
+    size_t idx = 0;
+    bool seenUnitId[256] = {}; // unit_id is a uint8_t, one slot per possible value
+    for (JsonObjectConst inv : inverters) {
+        if (idx >= INV_MAX_COUNT) { break; }
+        if (!inv["unit_id"].is<uint8_t>()) { continue; } // malformed entry, drop it
+        if (!inv["serial"].is<const char*>()) { continue; } // malformed entry, drop it
+        uint8_t unitId = inv["unit_id"].as<uint8_t>();
+        if (unitId < 1 || unitId > 247) { continue; } // out of valid Modbus unit ID range, drop it
+        if (seenUnitId[unitId]) { continue; } // duplicate unit_id, drop it (WebApi rejects these too)
+        const char* serialText = inv["serial"].as<const char*>();
+        // strtoull skips leading whitespace and accepts a sign (negating it), so
+        // insist on a hex digit first and a fully consumed string.
+        if (!isxdigit(static_cast<unsigned char>(serialText[0]))) { continue; }
+        char* serialEnd = nullptr;
+        uint64_t serial = strtoull(serialText, &serialEnd, 16);
+        if (*serialEnd != '\0') { continue; }
+        // Serial == 0 doubles as the "end of list" terminator below and in
+        // unitIdToInverter(), so a zero/unparseable serial must never be
+        // written mid-array - it would hide every entry after it.
+        if (serial == 0) { continue; }
+        seenUnitId[unitId] = true;
+        target.Inverter[idx].Serial = serial;
+        target.Inverter[idx].UnitId = unitId;
+        ++idx;
+    }
+    // zero-terminate remaining slots
+    for (; idx < INV_MAX_COUNT; ++idx) {
+        target.Inverter[idx].Serial = 0ULL;
+        target.Inverter[idx].UnitId = 0;
+    }
+}
+
 void ConfigurationClass::deserializeBatteryGuardConfig(JsonObject const& source, BatteryGuardConfig& target)
 {
     target.Enabled = source["enabled"] | BATTERYGUARD_ENABLED;
@@ -880,6 +942,9 @@ bool ConfigurationClass::read()
 
     config.WiFi.Dhcp = wifi["dhcp"] | WIFI_DHCP;
     config.WiFi.ApTimeout = wifi["aptimeout"] | ACCESS_POINT_TIMEOUT;
+    config.WiFi.RescanEnabled = wifi["rescan_enabled"] | WIFI_RESCAN_ENABLED;
+    config.WiFi.RescanInterval = wifi["rescan_interval"] | WIFI_RESCAN_INTERVAL;
+    config.WiFi.RescanThreshold = wifi["rescan_threshold"] | WIFI_RESCAN_THRESHOLD;
 
     JsonObject mdns = doc["mdns"];
     config.Mdns.Enabled = mdns["enabled"] | MDNS_ENABLED;
@@ -989,7 +1054,11 @@ bool ConfigurationClass::read()
     for (uint8_t i = 0; i < LOG_MODULE_COUNT; i++) {
         JsonObject module = modules[i].as<JsonObject>();
         strlcpy(config.Logging.Modules[i].Name, module["name"] | "", sizeof(config.Logging.Modules[i].Name));
-        config.Logging.Modules[i].Level = module["level"] | ESP_LOG_VERBOSE;
+        config.Logging.Modules[i].Level = module["level"] | ESP_LOG_ERROR;
+        if (module["level"].isNull()) {
+            // no level saved: leave the slot empty so the module inherits the default level
+            config.Logging.Modules[i].Name[0] = '\0';
+        }
     }
 
     JsonObject solarcharger = doc["solarcharger"];
@@ -1020,6 +1089,8 @@ bool ConfigurationClass::read()
     deserializeGridChargerCanConfig(gridcharger["can"], config.GridCharger.Can);
     deserializeGridChargerHuaweiConfig(gridcharger["huawei"], config.GridCharger.Huawei);
     deserializeGridChargerTruckiConfig(gridcharger["trucki"], config.GridCharger.Trucki);
+
+    deserializeModbusServerConfig(doc["modbusserver"], config.ModbusServer);
     deserializeBatteryGuardConfig(doc["batteryguard"], config.BatteryGuard);
 
     f.close();
@@ -1120,7 +1191,10 @@ void ConfigurationClass::migrate()
     }
 
     if (config.Cfg.Version < 0x00011e00) {
-        config.Logging.Default = ESP_LOG_VERBOSE;
+        // do not enable verbose logging by default: it floods the log buffer,
+        // consumes lots of CPU/heap (esp. on ESP32 without PSRAM) and can make
+        // the web interface and MQTT unresponsive. users can still opt in.
+        config.Logging.Default = ESP_LOG_ERROR;
         strlcpy(config.Logging.Modules[0].Name, "CORE", sizeof(config.Logging.Modules[0].Name));
         config.Logging.Modules[0].Level = ESP_LOG_ERROR;
     }
@@ -1403,8 +1477,14 @@ void ConfigurationClass::loop()
         return;
     }
 
+    // close the write guard for new writers, inform all existing writers and wait for them to finish
+    sWriterActive = true;
     sWriterCv.notify_all();
     sWriterCv.wait(lock, [] { return sWriterCount == 0; });
+
+    // open the write guard for new writers and inform all waiting writers that they can continue
+    sWriterActive = false;
+    sWriterCv.notify_all();
 }
 
 CONFIG_T& ConfigurationClass::WriteGuard::getConfig()
@@ -1415,8 +1495,14 @@ CONFIG_T& ConfigurationClass::WriteGuard::getConfig()
 ConfigurationClass::WriteGuard::WriteGuard()
     : _lock(sWriterMutex)
 {
+    // if writers are currently processed, we must wait for them to finish before we can add ourselves to the writer count
+    if (sWriterActive) {
+        sWriterCv.wait(_lock, [] { return !sWriterActive; });
+    }
+
+    // add ourselves to the writer count and wait to be processed
     sWriterCount++;
-    sWriterCv.wait(_lock);
+    sWriterCv.wait(_lock, [] { return sWriterActive; });
 }
 
 ConfigurationClass::WriteGuard::~WriteGuard()

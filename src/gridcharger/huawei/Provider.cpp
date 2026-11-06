@@ -11,6 +11,7 @@
 #include <Configuration.h>
 #include <LogHelper.h>
 #include <MqttSettings.h>
+#include <Utils.h>
 
 #undef TAG
 static const char* TAG = "gridCharger";
@@ -65,8 +66,7 @@ bool Provider::init()
         _mode = HUAWEI_MODE_AUTO_INT;
     }
 
-    // Set initial mode in datapoints
-    _dataPoints.add<DataPointLabel::Mode>(_mode, true);
+    updateModeDataPoint();
 
     subscribeTopics();
 
@@ -372,6 +372,15 @@ void Provider::_setParameter(float val, HardwareInterface::Setting setting, bool
     _upHardwareInterface->setParameter(setting, val, pollFeedback);
 }
 
+void Provider::updateModeDataPoint() const
+{
+    // the stats publish the mode, but otherwise only receive the data read
+    // from the charger, which does not include the mode.
+    DataPointContainer dataPoints;
+    dataPoints.add<DataPointLabel::Mode>(_mode, true);
+    _stats->updateFrom(dataPoints);
+}
+
 void Provider::setMode(uint8_t mode) {
     std::lock_guard<std::mutex> lock(_mutex);
 
@@ -380,14 +389,13 @@ void Provider::setMode(uint8_t mode) {
     if (mode == HUAWEI_MODE_OFF) {
         disableOutput();
         _mode = HUAWEI_MODE_OFF;
+        updateModeDataPoint();
     }
     if (mode == HUAWEI_MODE_ON) {
         enableOutput();
         _mode = HUAWEI_MODE_ON;
+        updateModeDataPoint();
     }
-
-    // Update mode in datapoints
-    _dataPoints.add<DataPointLabel::Mode>(_mode, true);
 
     auto const& config = Configuration.get();
 
@@ -404,8 +412,7 @@ void Provider::setMode(uint8_t mode) {
 
     if (mode == HUAWEI_MODE_AUTO_EXT || mode == HUAWEI_MODE_AUTO_INT) {
         _mode = mode;
-        // Update mode in datapoints for AUTO modes too
-        _dataPoints.add<DataPointLabel::Mode>(_mode, true);
+        updateModeDataPoint();
     }
 }
 
@@ -414,15 +421,13 @@ void Provider::onMqttMessage(Topic enumTopic,
         const char* topic, const uint8_t* payload, size_t len)
 {
     std::string strValue(reinterpret_cast<const char*>(payload), len);
-    float payload_val = -1;
-    try {
-        payload_val = std::stof(strValue);
-    }
-    catch (std::invalid_argument const& e) {
+    auto parsed = Utils::getFromString<float>(strValue.c_str(), true);
+    if (!parsed) {
         DTU_LOGE("Huawei MQTT handler: cannot parse payload of topic '%s' as float: %s",
                 topic, strValue.c_str());
         return;
     }
+    float payload_val = *parsed;
 
     using Setting = HardwareInterface::Setting;
 

@@ -51,6 +51,9 @@ void Stats::getLiveViewData(JsonVariant& root) const
     addLiveViewInSection(root, "modules", "offline", _moduleCountOffline, "", 0);
     addLiveViewInSection(root, "modules", "blockingCharge", _moduleCountBlockingCharge, "", 0);
     addLiveViewInSection(root, "modules", "blockingDischarge", _moduleCountBlockingDischarge, "", 0);
+    if (_moduleCountHeating != -1) {
+        addLiveViewInSection(root, "modules", "heating", _moduleCountHeating, "", 0);
+    }
 
     // alarms and warnings go into the "Issues" card of the web application
     addLiveViewWarning(root, "highCurrentDischarge", _warningHighDischargeCurrent);
@@ -128,6 +131,9 @@ void Stats::mqttPublish() const
     MqttSettings.publish("battery/modulesOffline", String(_moduleCountOffline));
     MqttSettings.publish("battery/modulesBlockingCharge", String(_moduleCountBlockingCharge));
     MqttSettings.publish("battery/modulesBlockingDischarge", String(_moduleCountBlockingDischarge));
+    if (_moduleCountHeating != -1) {
+        MqttSettings.publish("battery/modulesHeating", String(_moduleCountHeating));
+    }
 
     MqttSettings.publish("battery/alarm/overCurrentDischarge", String(_alarmOverCurrentDischarge));
     MqttSettings.publish("battery/alarm/overCurrentCharge", String(_alarmOverCurrentCharge));
