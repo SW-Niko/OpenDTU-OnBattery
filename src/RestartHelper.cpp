@@ -20,8 +20,11 @@ void RestartHelperClass::init(Scheduler& scheduler)
     scheduler.addTask(_rebootTask);
 }
 
-void RestartHelperClass::triggerRestart()
+void RestartHelperClass::triggerRestart(bool saveRuntimeData)
 {
+    // sticky: once a caller asked to skip the write, a later request must not re-enable it
+    if (!saveRuntimeData) { _saveRuntimeData = false; }
+
     _rebootTask.enable();
     _rebootTask.restart();
 }
@@ -32,8 +35,8 @@ void RestartHelperClass::loop()
         LedSingle.turnAllOff();
         Display.setStatus(false);
 
-        // write the runtime data to LittleFS, but do not write if last write operation was less than 10 min ago
-        Runtime.writeAll(10);
+        // write the runtime data to LittleFS, but do not write if last write operation was less than 1 min ago
+        if (_saveRuntimeData) { Runtime.writeAll(1); }
     } else {
         ESP.restart();
     }
