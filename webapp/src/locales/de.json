@@ -1252,7 +1252,7 @@
         "Value": "Wert",
         "Unit": "@:base.Unit",
         "SoC": "Ladezustand (SoC)",
-        "fullyChargedDays": "Tage seit Volladung",
+        "fullyChargedDays": "Tage seit 100% SoC",
         "stateOfHealth": "Batteriezustand (SoH)",
         "voltage": "Spannung",
         "current": "Strom",
