@@ -51,18 +51,9 @@ void Stats::getLiveViewData(JsonVariant& root) const
         addLiveViewValue(root, "SoC", _soc, "%", _socPrecision);
     }
 
-    if (_oSoCFullEpoch.has_value()) {
-        tm fullTime;
-        time_t nowTime;
-        localtime_r(&_oSoCFullEpoch.value(), &fullTime);
-        fullTime.tm_hour = fullTime.tm_min = fullTime.tm_sec = 0; // always start from midnight
-        if (Utils::getEpoch(&nowTime, 5)) {
-            auto midnightEpoch = mktime(&fullTime);
-            if ((midnightEpoch != -1) && (nowTime >= midnightEpoch)) {
-                auto days = static_cast<uint16_t>(difftime(nowTime, midnightEpoch) / (60.0 * 60.0 * 24.0));
-                addLiveViewValue(root, "fullyChargedDays", days, "days", 0);
-            }
-        }
+    auto days = getPastDaysSinceFullyCharged();
+    if (days.has_value()) {
+        addLiveViewValue(root, "fullyChargedDays", days.value(), "days", 0);
     }
 
     if (isVoltageValid()) {
@@ -180,23 +171,6 @@ void Stats::mqttPublish() const
     }
 }
 
-void Stats::checkSoCFullEpoch(void)
-{
-    static uint32_t lastUpdate = 0;
-
-    if (lastUpdate == _lastUpdate) { return; } // fast exit from already processed values
-    lastUpdate = _lastUpdate;
-    time_t nowEpoch;
-
-    // The goal is to record the time when we reach 100% SoC, to record the time as long as we have 100% SoC,
-    // and to maintain the time until we reach 100% SoC again.
-    if (isSoCValid() && (getSoCAgeSeconds() <= 30) && (getSoC() >= 100.0f) && Utils::getEpoch(&nowEpoch, 5)) {
-        if (!_oSoCFullEpoch.has_value() || (nowEpoch > _oSoCFullEpoch.value())) {
-            _oSoCFullEpoch = nowEpoch;
-        }
-    }
-}
-
 /*
  * Returns the nominal capacity of the battery, preferring a value reported by the battery itself (if available),
  * but falling back to a user-configured value if not. If neither is available, returns std::nullopt.
@@ -225,6 +199,63 @@ std::optional<float> Stats::getNominalVoltage() const {
         voltage = Configuration.get().Battery.NominalVoltage;
     }
     return voltage;
+}
+
+std::optional<uint16_t> Stats::getPastDaysSinceFullyCharged(void) const
+{
+    if (!_oFullyChargedEpoch.has_value()) { return std::nullopt; }
+
+    time_t nowTime;
+    if (!Utils::getEpoch(&nowTime, 5)) { return std::nullopt; }
+
+    tm fullTime{};
+    if (localtime_r(&_oFullyChargedEpoch.value(), &fullTime) == nullptr) { return std::nullopt; }
+
+    fullTime.tm_hour = fullTime.tm_min = fullTime.tm_sec = 0; // always start from midnight
+    auto midnightEpoch = mktime(&fullTime);
+    if ((midnightEpoch != -1) && (nowTime >= midnightEpoch)) {
+
+        // calculate the number of full days since the battery reached full charged
+        return static_cast<uint16_t>(difftime(nowTime, midnightEpoch) / (60.0 * 60.0 * 24.0));
+    }
+    return std::nullopt;
+}
+
+void Stats::setFullyChargedEpoch(std::optional<time_t> full)
+{
+    // we only set the fully charged epoch from runtime if we haven't already set it
+    // and we have a valid value
+    if (!_dataFromRuntimeProcessed && full.has_value() && !_oFullyChargedEpoch.has_value()) {
+        _oFullyChargedEpoch = full;
+    }
+    _dataFromRuntimeProcessed = true;
+}
+
+void Stats::checkFullyChargedEpoch(void)
+{
+    if (!isSoCValid()) { return; } // fast exit if SoC is not supported or not available
+    if (_lastSoCFullEpochUpdate == _lastUpdate) { return; } // fast exit from already processed values
+
+    time_t nowEpoch;
+    if (!Utils::getEpoch(&nowEpoch, 0)) { return; } // we need a valid epoch to proceed
+
+    _lastSoCFullEpochUpdate = _lastUpdate;
+    if (_oFullyChargedEpoch.has_value()) {
+
+        // the goal is to record the time when we reach 100% SoC, to record the time as long as we have 100% SoC,
+        // and to maintain the time until we reach 100% SoC again.
+        if ((getSoCAgeSeconds() <= 60) && (getSoC() >= 100.0f) && (nowEpoch > _oFullyChargedEpoch.value())) {
+            _oFullyChargedEpoch = nowEpoch;
+        }
+    } else {
+
+        // if the epoch is still unset after receiving data from the runtime file, set it to the current epoch
+        // as fallback to avoid waiting until the next 100% SoC to set the epoch
+        // yes, the epoch is incorrect in this case, but it is useful for the initial setup and high level functions
+        if (_dataFromRuntimeProcessed) {
+            _oFullyChargedEpoch = nowEpoch;
+        }
+    }
 }
 
 } // namespace Batteries

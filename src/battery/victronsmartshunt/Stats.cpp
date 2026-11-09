@@ -75,23 +75,22 @@ void Stats::mqttPublish() const {
     MqttSettings.publish("battery/midpointDeviation", String(_midpointDeviation));
 }
 
-void Stats::checkSoCFullEpoch(void) {
-    static uint32_t lastUpdate = 0;
+void Stats::checkFullyChargedEpoch(void) {
 
-    if (lastUpdate == _lastUpdate) { return; } // fast exit from already processed values
-    lastUpdate = _lastUpdate;
+    // we can trust the smart shunt provider because _lastUpdate remains 0 as long as all data is not read from the shunt
+    if ((_lastUpdate == 0) || (_lastSoCFullEpochUpdate == _lastUpdate)) { return; } // fast exit from already processed values
+
     time_t nowEpoch;
+    if (!Utils::getEpoch(&nowEpoch, 0)) { return; } // we need a valid epoch to proceed
 
-    if (Utils::getEpoch(&nowEpoch, 5)) {
+    _lastSoCFullEpochUpdate = _lastUpdate;
 
-        // reverse calculation to get 'fully charged epoch' from the smart shunt duration value
-        auto shuntEpoch = std::make_optional(nowEpoch - static_cast<time_t>(_lastFullCharge * 60));
-        auto lastEpoch = getSoCFullEpoch();
+    // reverse calculation to get 'fully charged epoch' from the smart shunt 'duration value'
+    auto shuntEpoch = nowEpoch - static_cast<time_t>(_lastFullCharge * 60);
 
-        // We only update if the value is not in the future and we don't have epoch yet or we have a newer value
-        if ((shuntEpoch.value() <= nowEpoch) && (!lastEpoch.has_value() || (shuntEpoch.value() > lastEpoch))) {
-            setSoCFullEpoch(shuntEpoch);
-        }
+    // we only update if the value is not in the future and we don't have epoch yet or we have a newer value
+    if ((shuntEpoch <= nowEpoch) && (!_oFullyChargedEpoch.has_value() || (shuntEpoch > _oFullyChargedEpoch.value()))) {
+        _oFullyChargedEpoch = shuntEpoch;
     }
 }
 
