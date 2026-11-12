@@ -507,10 +507,11 @@ std::optional<float> BatteryGuardClass::gResistanceUsed(void) const {
 /*
  * Prepare data to be written into the runtime file
  */
-void BatteryGuardClass::serializeRT(JsonObject obj) const {
+void BatteryGuardClass::serializeRT(JsonObject root) const {
     std::shared_lock<std::shared_mutex> lock(_mutex);
 
     // DC-Pulse Resistance
+    JsonObject obj = root[getIdRT()].to<JsonObject>();
     obj[DC_PULSE_RESISTANCE] = _resistanceFromCalcAVG.getAverage();
     auto counts = static_cast<uint16_t>(_resistanceFromCalcAVG.getCounts());
     auto factor = static_cast<uint16_t>(_resistanceFromCalcAVG.getFactor());
