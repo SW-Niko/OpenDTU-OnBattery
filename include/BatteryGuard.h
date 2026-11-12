@@ -54,7 +54,7 @@ class BatteryGuardClass : public InterfaceProviderRT {
         bool isRechargeHelperInStateStart(void) const { std::shared_lock lock(_mutex); return (_hState == HState::START); }
 
         String getIdRT() const override { return "battery_guard"; }
-        void serializeRT(JsonObject obj) const override;
+        void serializeRT(JsonObject root) const override;
         void deserializeRT(JsonObject obj) override;
 
     private:
