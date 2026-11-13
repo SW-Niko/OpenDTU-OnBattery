@@ -608,7 +608,12 @@ void ConfigurationClass::deserializePowerMeterSerialSdmConfig(JsonObject const& 
 
 void ConfigurationClass::deserializePowerMeterHttpJsonConfig(JsonObject const& source, PowerMeterHttpJsonConfig& target)
 {
-    target.PollingIntervalMs = source["polling_interval_ms"] | POWERMETER_POLLING_INTERVAL * 1000;
+    if (source["polling_interval_ms"].is<uint32_t>()) {
+        target.PollingIntervalMs = source["polling_interval_ms"];
+    } else {
+        // legacy migration support, convert polling_interval from seconds to milliseconds
+        target.PollingIntervalMs = (source["polling_interval"] | POWERMETER_POLLING_INTERVAL) * 1000;
+    }
     target.PollingIntervalMs = std::clamp(target.PollingIntervalMs, 100u, 15000u);
     target.SettlingTimeMs = source["settling_time_ms"] | POWERMETER_SETTLING_TIME_MS;
     target.SettlingTimeMs = std::clamp(target.SettlingTimeMs, 1000u, 15000u);
@@ -1389,13 +1394,6 @@ void ConfigurationClass::migrateOnBattery()
         config.GridCharger.Huawei.InputCurrentLimit = huawei["input_current_limit"] | GRIDCHARGER_HUAWEI_INPUT_CURRENT_LIMIT;
         config.GridCharger.Huawei.FanOnlineFullSpeed = huawei["fan_online_full_speed"] | GRIDCHARGER_HUAWEI_FAN_ONLINE_FULL_SPEED;
         config.GridCharger.Huawei.FanOfflineFullSpeed = huawei["fan_offline_full_speed"] | GRIDCHARGER_HUAWEI_FAN_OFFLINE_FULL_SPEED;
-    }
-
-    if (config.Cfg.VersionOnBattery < 9) {
-        // new unit is now milliseconds
-        JsonObject httpJson = doc["powermeter"]["http_json"];
-        config.PowerMeter.HttpJson.PollingIntervalMs = httpJson["polling_interval"] | POWERMETER_POLLING_INTERVAL;
-        config.PowerMeter.HttpJson.PollingIntervalMs *= 1000;
     }
 
     f.close();
