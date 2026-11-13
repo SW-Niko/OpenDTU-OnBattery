@@ -39,7 +39,7 @@ class BatteryGuardClass : public InterfaceProviderRT {
         void updateSettings(UpdateSource const source = UpdateSource::STARTUP);
         std::optional<bool> isStopThresholdReached(bool const inStateStop);
         uint16_t calculatePowerLimit(uint16_t const requestedPower, uint16_t const nowPower, uint32_t const nowMillis);
-        void calculateRechargeHelper(void);
+        bool calculateRechargeHelper(void);
 
         // public getter methods with shared lock
         void serializeInfo(JsonObject const& start) const;

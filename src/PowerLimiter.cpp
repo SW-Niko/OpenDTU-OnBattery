@@ -152,6 +152,7 @@ void PowerLimiterClass::reloadConfig()
 
     calcNextInverterRestart();
 
+    _devicesReadyAfterStartup = false;
     _reloadConfigFlag = false;
 }
 
@@ -1078,27 +1079,38 @@ bool PowerLimiterClass::isGovernedBatteryPoweredInverterProducing() const
 }
 
 bool PowerLimiterClass::areDevicesReadyAfterStartup() {
+    auto ready = true;
 
     // fast return if we already know the devices are ready after startup
     if (_devicesReadyAfterStartup) { return true; }
 
     // the battery state is only evaluated if we govern a battery powered inverter
-    if (!usesBatteryPoweredInverter()) { return true; }
+    if (ready && usesBatteryPoweredInverter()) {
 
-    // the battery thresholds use the SoC if the battery interface is enabled and the SoC is not ignored
-    // (see canUseSoCThresholds in the web UI), otherwise a voltage. Without a source the voltage is 0 V,
-    // which counts as 'stop threshold reached' and would discard the restored battery state.
-    auto const& config = Configuration.get();
-    bool socMode = config.Battery.Enabled && !config.PowerLimiter.IgnoreSoc;
-    bool ready = socMode ? Battery.getStats()->isSoCValid() : (getBatteryVoltage() > 0);
+        // the battery thresholds use the SoC if the battery interface is enabled and the SoC is not ignored
+        // (see canUseSoCThresholds in the web UI), otherwise a voltage. Without a source the voltage is 0 V,
+        // which counts as 'stop threshold reached' and would discard the restored battery state.
+        auto const& config = Configuration.get();
+        bool socMode = config.Battery.Enabled && !config.PowerLimiter.IgnoreSoc;
+        ready = socMode ? Battery.getStats()->isSoCValid() : (getBatteryVoltage() > 0);
+    }
+
+    // the 'recharge helper' is only evaluated if he is in the start state
+    if (ready && BatteryGuard.isRechargeHelperInStateStart()) {
+
+        // if the 'recharge helper' is in start state (system startup or configuration update)
+        // we have to calculate the thresholds before we use them in the DPL loop.
+        ready = BatteryGuard.calculateRechargeHelper();
+    }
+
+    // add additional devices here if needed, for example Solar-Charger or AC-Charger?
 
     if (!ready) {
+
         // we do not wait infinitely, the 15-second timeout starts when we wait for the first time
         if (_devicesPendingSince == 0) { _devicesPendingSince = millis(); }
         if ((millis() - _devicesPendingSince) < 15 * 1000) { return false; }
     }
-
-    // add additional devices here if needed, for example Solar-Charger or AC-Charger?
 
     // if we reach this point, all required devices are ready after startup or they have passed their
     // respective timeouts and we proceed with fallback values if necessary

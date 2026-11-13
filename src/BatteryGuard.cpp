@@ -1066,6 +1066,7 @@ frozen::string const& BatteryGuardClass::gLimiterStateText(BatteryGuardClass::LS
 
 /*
  * The recharge helper supports the battery to calibrate the SoC (100% SoC)
+ * Returns true if the recharge helper has successfully calculated new thresholds or not enabled, false otherwise
  * States:  Explanation of the state machine
  * Off:     We do nothing
  * Error:   We do nothing because we have an error (config error or no SoC time)
@@ -1075,9 +1076,9 @@ frozen::string const& BatteryGuardClass::gLimiterStateText(BatteryGuardClass::LS
  * Stage 2: We reduce the maximum inverter power. Change every day at 12:00
  * Stage 3: We keep the maximum start/stop-thresholds and the minimum inverter power
  */
-void BatteryGuardClass::calculateRechargeHelper(void) {
+bool BatteryGuardClass::calculateRechargeHelper(void) {
 
-    if (!_useRechargeHelper) { return; } // fast exit to avoid locking
+    if (!_useRechargeHelper) { return true; } // fast exit to avoid locking
 
     // read external state without holding the mutex
     auto fullEpoch = Battery.getStats()->getFullyChargedEpoch().value_or(0);
@@ -1086,7 +1087,7 @@ void BatteryGuardClass::calculateRechargeHelper(void) {
 
     std::unique_lock<std::shared_mutex> lock(_mutex);
 
-    if (_hState == HState::OFF) { return; }
+    if (_hState == HState::OFF) { return true; }
 
     // check config errors
     auto const& config = Configuration.get();
@@ -1117,7 +1118,7 @@ void BatteryGuardClass::calculateRechargeHelper(void) {
     if (_configError || (!oDay.has_value()) || (nowEpoch == 0)) {
         resetRechargeHelper();
         _hState = HState::ERROR;
-        return;
+        return false;
     }
 
     // all errors gone. If we reach this line, we can start again
@@ -1130,7 +1131,7 @@ void BatteryGuardClass::calculateRechargeHelper(void) {
     }
 
     // we are not in a start state or don't get the 12:00 time trigger, we abort
-    if ((_hState != HState::START) && !gRechargeTimeTrigger(nowEpoch)) { return; }
+    if ((_hState != HState::START) && !gRechargeTimeTrigger(nowEpoch)) { return true; }
 
     // special handling for starting up, because we change values not before 12:00 o'clock
     uint16_t day = _dayCounter;
@@ -1146,7 +1147,7 @@ void BatteryGuardClass::calculateRechargeHelper(void) {
     if (day < stopDay) {
         if (_hState != HState::IDLE) { resetRechargeHelper(); }
         _hState = HState::IDLE;
-        return;
+        return true;
     }
 
     // Stage 1: We increase the battery start/stop-thresholds every day
@@ -1173,7 +1174,7 @@ void BatteryGuardClass::calculateRechargeHelper(void) {
             _oSoCStopThreshold = stopMin + (stopMax - stopMin) * dayFactor;
         }
         _hState = HState::STAGE1;
-        return;
+        return true;
     }
 
     // Stage 1 is over, we set the maximum thresholds
@@ -1197,13 +1198,13 @@ void BatteryGuardClass::calculateRechargeHelper(void) {
         auto maxUpperPowerLimit = gUpperPowerLimitUsed();
         _oPowerLimit = maxUpperPowerLimit - (maxUpperPowerLimit - powerMin) * dayFactor;
         _hState = HState::STAGE2;
-        return;
+        return true;
     }
 
     // Stage 3: we use the maximum start/stop-thresholds and the minimum upper power limit until the battery is full
     _oPowerLimit = config.BatteryGuard.UpperPowerLimit;
     _hState = HState::STAGE3;
-    return;
+    return true;
 }
 
 
