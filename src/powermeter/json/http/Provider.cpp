@@ -93,29 +93,40 @@ void Provider::pollingLoop()
     WeightedAVG<uint32_t> avgPollTime{50};     // average poll time
     WeightedAVG<uint32_t> avgIntervalTime{50}; // average interval time
     WeightedAVG<uint32_t> avgPauseTime{50};    // average pause time
+
+    // polling configuration
     bool usePauseInterval  = false;
     uint32_t intervalMillis = _cfg.PollingIntervalMs;
-    uint32_t minPollWait = _cfg.PollingIntervalMs / 2; // minimum poll wait time in milliseconds
+    uint32_t minWaitMillis = intervalMillis / 2;
     uint32_t sleepMs = 0;
+    uint32_t pollEnd = 0;
+    uint32_t pauseStart = 0;
 
     while (!_stopPolling) {
+        uint32_t now = millis();
 
         // determine the sleep duration based on pause or polling interval
         if (_pausePolling) {
             sleepMs = _pauseDuration;
             usePauseInterval = true;
             _trigger = false; // reset the trigger when entering pause
-            _lastPoll = millis(); // to do logging correctly
+            pauseStart = now; // do logging correctly
         } else {
-            // calculate the sleep duration and ensure a minimum wait time
-            uint32_t elapsedMillis = millis() - _lastPoll;
-            sleepMs = ((_lastPoll > 0) && (elapsedMillis < intervalMillis)) ? (intervalMillis - elapsedMillis) : minPollWait;
-            sleepMs = std::max(sleepMs, minPollWait);
+            uint32_t elapsedStart = now - _lastPoll;
+            uint32_t elapsedEnd = now - pollEnd;
+
+            // keep the normal polling interval or at least the minimum poll wait time
+            uint32_t remainingInterval = elapsedStart < intervalMillis ? intervalMillis - elapsedStart : 0;
+            uint32_t remainingMinPollWait = elapsedEnd < minWaitMillis ? minWaitMillis - elapsedEnd : 0;
+            sleepMs = std::max(remainingInterval, remainingMinPollWait);
+
             usePauseInterval = false;
         }
 
         const uint16_t pauseID = _pauseID;
-        _cv.wait_for(lock, std::chrono::milliseconds(sleepMs), [this] { return (_stopPolling || _trigger); }); // releases the mutex
+        if (sleepMs > 0) {
+            _cv.wait_for(lock, std::chrono::milliseconds(sleepMs), [this] { return (_stopPolling || _trigger); }); // releases the mutex
+        }
         _trigger = false; // reset the trigger after waking up
 
         // skip polling if stopping, newly paused, or the pause was retriggered while waiting
@@ -130,7 +141,7 @@ void Provider::pollingLoop()
         uint32_t pollStart = millis();
         if (_lastPoll > 0) {
             if (usePauseInterval) {
-                avgPauseTime.addNumber(pollStart - _lastPoll);
+                avgPauseTime.addNumber(pollStart - pauseStart);
             } else {
                 avgIntervalTime.addNumber(pollStart - _lastPoll);
             }
@@ -143,7 +154,7 @@ void Provider::pollingLoop()
         auto res = poll();
         lock.lock();
 
-        uint32_t pollEnd = millis();
+        pollEnd = millis();
 
         if (std::holds_alternative<String>(res)) {
             DTU_LOGE("%s", std::get<String>(res).c_str());
