@@ -43,7 +43,7 @@ public:
     void setSoCFullEpoch(std::optional<time_t> full) { _oSoCFullEpoch = full; }
     virtual void checkSoCFullEpoch(void);
 
-    std::optional<uint16_t> getNominalCapacity() const;
+    std::optional<float> getNominalCapacity() const;
     std::optional<float> getNominalVoltage() const;
 
     std::optional<float> getTemperature() const {
@@ -115,7 +115,7 @@ protected:
         _lastUpdateChargeCurrentLimit = _lastUpdate = timestamp;
     }
 
-    void setNominalCapacity(uint16_t nominalCapacity) {
+    void setNominalCapacity(float nominalCapacity) {
         _nominalCapacity = nominalCapacity;
     }
 
@@ -239,7 +239,7 @@ private:
     float _temperature = 0;
     uint32_t _lastUpdateTemperature = 0;
 
-    uint16_t _nominalCapacity = 0;  // the nominal capacity of the battery [Ah]
+    float _nominalCapacity = 0;     // the nominal capacity of the battery [Ah]
     float _nominalVoltage = 0;      // the nominal voltage of the battery [V]
 };
 

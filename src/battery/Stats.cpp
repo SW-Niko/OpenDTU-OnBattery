@@ -201,8 +201,8 @@ void Stats::checkSoCFullEpoch(void)
  * Returns the nominal capacity of the battery, preferring a value reported by the battery itself (if available),
  * but falling back to a user-configured value if not. If neither is available, returns std::nullopt.
 */
-std::optional<uint16_t> Stats::getNominalCapacity() const {
-    std::optional<uint16_t> capacity = std::nullopt;
+std::optional<float> Stats::getNominalCapacity() const {
+    std::optional<float> capacity = std::nullopt;
 
     if (_nominalCapacity > 0) {
         capacity = _nominalCapacity;
