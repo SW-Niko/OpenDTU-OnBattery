@@ -54,7 +54,7 @@ class BatteryGuardClass : public InterfaceProviderRT {
         bool isRechargeHelperInStateStart(void) const { std::shared_lock lock(_mutex); return (_hState == HState::START); }
 
         String getIdRT() const override { return "battery_guard"; }
-        void serializeRT(JsonObject obj) const override;
+        void serializeRT(JsonObject root) const override;
         void deserializeRT(JsonObject obj) override;
 
     private:
@@ -186,7 +186,6 @@ class BatteryGuardClass : public InterfaceProviderRT {
         std::optional<float> _oSoCStopThreshold;            // shared data, battery SoC stop threshold, std::nullopt if not active
         bool _configError = false;                          // true if a configuration error was detected
         bool _lastTimeTrigger = false;                      // true if the trigger was already activated within the time window.
-        time_t _fallbackSoCEpoch = 0;                       // fallback epoch if the 100% SoC epoch is not available
 };
 
 extern BatteryGuardClass BatteryGuard;

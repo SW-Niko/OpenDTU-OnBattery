@@ -39,10 +39,6 @@ public:
     float getChargeCurrentLimit() const { return _chargeCurrentLimit; };
     uint32_t getChargeCurrentLimitAgeSeconds() const { return (millis() - _lastUpdateChargeCurrentLimit) / 1000; }
 
-    std::optional<time_t> getSoCFullEpoch() const { return _oSoCFullEpoch; }
-    void setSoCFullEpoch(std::optional<time_t> full) { _oSoCFullEpoch = full; }
-    virtual void checkSoCFullEpoch(void);
-
     std::optional<uint16_t> getNominalCapacity() const;
     std::optional<float> getNominalVoltage() const;
 
@@ -55,6 +51,16 @@ public:
     }
 
     uint32_t getTemperatureAgeSeconds() const { return (millis() - _lastUpdateTemperature) / 1000; }
+
+    // returns the epoch at which the battery reached 100% SoC, if available
+    std::optional<time_t> getFullyChargedEpoch() const { return _oFullyChargedEpoch; }
+
+    // sets the epoch with data from the runtime file
+    void setFullyChargedEpoch(std::optional<time_t> full);
+
+    // checks if the epoch needs to be updated based on current SoC
+    // override this method in derived classes to implement custom logic for native support
+    virtual void checkFullyChargedEpoch(void);
 
     // convert stats to JSON for web application live view
     virtual void getLiveViewData(JsonVariant& root) const;
@@ -207,10 +213,16 @@ protected:
         root["issues"][name] = 2;
     }
 
+    // returns the number of past days since the battery was fully charged, if available
+    std::optional<uint16_t> getPastDaysSinceFullyCharged(void) const;
+
     String _hwversion = "";
     String _fwversion = "";
     String _serial = "";
     uint32_t _lastUpdate = 0;
+    uint32_t _lastSoCFullEpochUpdate = 0;
+    std::optional<time_t> _oFullyChargedEpoch = std::nullopt;
+    bool _dataFromRuntimeProcessed = false;
 
     // set by providers whose battery reports it, see supportsFullChargeRequest()
     std::optional<bool> _fullChargeRequest = std::nullopt;
