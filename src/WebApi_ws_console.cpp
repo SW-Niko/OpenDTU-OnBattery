@@ -24,6 +24,7 @@ void WebApiWsConsoleClass::init(AsyncWebServer& server, Scheduler& scheduler)
     using std::placeholders::_6;
 
     server.addHandler(&_ws);
+    _ws.addMiddleware(&WebApiClass::wsClientLimit);
     MessageOutput.register_ws_output(&_ws);
     _ws.onEvent(std::bind(&WebApiWsConsoleClass::onWebsocketEvent, this, _1, _2, _3, _4, _5, _6));
 
@@ -39,6 +40,7 @@ void WebApiWsConsoleClass::init(AsyncWebServer& server, Scheduler& scheduler)
 
 void WebApiWsConsoleClass::onWebsocketEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len)
 {
+    WebApiClass::onWsClientEvent(client, type);
     if (type == WS_EVT_CONNECT) {
         ESP_LOGD(TAG, "Websocket: [%s][%" PRIu32 "] connect", server->url(), client->id());
     } else if (type == WS_EVT_DISCONNECT) {

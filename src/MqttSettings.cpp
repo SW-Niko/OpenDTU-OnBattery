@@ -80,6 +80,13 @@ void MqttSettingsClass::onMqttDisconnect(espMqttClientTypes::DisconnectReason re
 
     ESP_LOGW(TAG, "Disconnected from MQTT. Reason: %s", reasonStr);
 
+    // Drop partially received fragmented messages: they are incomplete by
+    // definition and reassembly state must not leak across connections. The
+    // broker re-sends retained/in-flight messages as needed after a
+    // reconnect. _fragments is only ever accessed from the mqtt client
+    // task's callbacks, so no additional locking is required here.
+    _fragments.clear();
+
     _mqttReconnectTimer.once(
         2, +[](MqttSettingsClass* instance) { instance->performConnect(); }, this);
 }
@@ -94,14 +101,35 @@ void MqttSettingsClass::onMqttMessage(const espMqttClientTypes::MessagePropertie
         return _mqttSubscribeParser.handle_message(properties, topic, payload, len);
     }
 
-    auto& fragment = _fragments[String(topic)];
+    // larger messages are not what we subscribed to, and on devices without
+    // PSRAM the memory would be missing elsewhere
+    static constexpr size_t kMaxMessageSize = 32 * 1024;
 
-    // first fragment of a new message
     if (index == 0) {
-        fragment.clear();
-        fragment.reserve(total);
+        _fragments.erase(String(topic));
+
+        if (total > kMaxMessageSize) {
+            ESP_LOGW(TAG, "Dropping MQTT message on topic '%s', too large (%zu bytes)", topic, total);
+            return;
+        }
+
+        try {
+            _fragments[String(topic)].reserve(total);
+        } catch (std::bad_alloc const&) {
+            _fragments.erase(String(topic));
+            ESP_LOGE(TAG, "Dropping MQTT message on topic '%s', out of memory (%zu bytes)", topic, total);
+            return;
+        }
     }
 
+    // the first fragment was dropped, or a fragment is missing
+    auto iter = _fragments.find(String(topic));
+    if (iter == _fragments.end() || iter->second.size() != index) {
+        if (iter != _fragments.end()) { _fragments.erase(iter); }
+        return;
+    }
+
+    auto& fragment = iter->second;
     fragment.insert(fragment.end(), payload, payload + len);
 
     if (fragment.size() < total) {

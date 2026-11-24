@@ -31,6 +31,7 @@ void WebApiWsGridChargerLiveClass::init(AsyncWebServer& server, Scheduler& sched
     _server->on("/api/gridchargerlivedata/status", HTTP_GET, static_cast<ArRequestHandlerFunction>(std::bind(&WebApiWsGridChargerLiveClass::onLivedataStatus, this, _1)));
 
     _server->addHandler(&_ws);
+    _ws.addMiddleware(&WebApiClass::wsClientLimit);
     _ws.onEvent(std::bind(&WebApiWsGridChargerLiveClass::onWebsocketEvent, this, _1, _2, _3, _4, _5, _6));
 
     scheduler.addTask(_wsCleanupTask);
@@ -107,6 +108,7 @@ void WebApiWsGridChargerLiveClass::generateCommonJsonResponse(JsonVariant& root)
 
 void WebApiWsGridChargerLiveClass::onWebsocketEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len)
 {
+    WebApiClass::onWsClientEvent(client, type);
     if (type == WS_EVT_CONNECT) {
         ESP_LOGD(TAG, "Websocket: [%s][%" PRIu32 "] connect", server->url(), client->id());
     } else if (type == WS_EVT_DISCONNECT) {
