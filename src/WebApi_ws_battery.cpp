@@ -32,6 +32,7 @@ void WebApiWsBatteryLiveClass::init(AsyncWebServer& server, Scheduler& scheduler
     _server->on("/api/batterylivedata/status", HTTP_GET, static_cast<ArRequestHandlerFunction>(std::bind(&WebApiWsBatteryLiveClass::onLivedataStatus, this, _1)));
 
     _server->addHandler(&_ws);
+    _ws.addMiddleware(&WebApiClass::wsClientLimit);
     _ws.onEvent(std::bind(&WebApiWsBatteryLiveClass::onWebsocketEvent, this, _1, _2, _3, _4, _5, _6));
 
     scheduler.addTask(_wsCleanupTask);
@@ -115,6 +116,7 @@ void WebApiWsBatteryLiveClass::generateCommonJsonResponse(JsonVariant& root)
 
 void WebApiWsBatteryLiveClass::onWebsocketEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len)
 {
+    WebApiClass::onWsClientEvent(client, type);
     if (type == WS_EVT_CONNECT) {
         ESP_LOGD(TAG, "Websocket: [%s][%u] connect", server->url(), client->id());
     } else if (type == WS_EVT_DISCONNECT) {
