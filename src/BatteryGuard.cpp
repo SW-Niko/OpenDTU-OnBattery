@@ -136,15 +136,31 @@ void BatteryGuardClass::updateSettings(UpdateSource const source) {
         _lState = LState::ERROR; // combination of "Stop-Voltage Limiter" and "Recharge Helper" with "SoC thresholds" doesn't make sense
     }
     _lowerPowerLimitOneInverter = 9999;
-    _upperPowerLimitFromConfig = 0;
+    uint16_t upperPowerSmart = 0;
+    uint16_t upperPowerBattery = 0;
+    bool useSmart = false;
+    bool useBattery = false;
     for (size_t i = 0; i < INV_MAX_COUNT; ++i) {
         auto const& invConfig = config.PowerLimiter.Inverters[i];
         if (invConfig.Serial == 0ULL) { break; }
         if (!invConfig.IsGoverned) { continue; }
+
+        if (invConfig.PowerSource == PowerLimiterInverterConfig::InverterPowerSource::SmartBuffer) {
+            upperPowerSmart += invConfig.UpperPowerLimit;
+            useSmart = true;
+        }
         if (invConfig.PowerSource == PowerLimiterInverterConfig::InverterPowerSource::Battery) {
-            _upperPowerLimitFromConfig += invConfig.UpperPowerLimit;
+            upperPowerBattery += invConfig.UpperPowerLimit;
+            useBattery = true;
             if (invConfig.LowerPowerLimit < _lowerPowerLimitOneInverter) { _lowerPowerLimitOneInverter = invConfig.LowerPowerLimit; }
         }
+    }
+    if (useSmart && !useBattery) {
+        _upperPowerLimitFromConfig = upperPowerSmart;
+        _useSmartBufferInverter = true;
+    } else {
+        _upperPowerLimitFromConfig = upperPowerBattery;
+        _useSmartBufferInverter = false;
     }
     if (_lowerPowerLimitOneInverter == 9999) { _lowerPowerLimitOneInverter = 50; }    // default value
     if (_upperPowerLimitFromConfig == 0) { _upperPowerLimitFromConfig = 800; }      // default value
@@ -719,7 +735,7 @@ uint16_t BatteryGuardClass::calculatePowerLimit(uint16_t const requestedPower, u
     auto backPower = requestedPower;
 
     // recharge helper: check if we have to limit the power
-    if (_useRechargeHelper && _oPowerLimit.has_value()) {
+    if (_useRechargeHelper && _oPowerLimit.has_value() && !_useSmartBufferInverter) {
         backPower = std::min(backPower, _oPowerLimit.value());
     }
 
@@ -1266,6 +1282,21 @@ std::optional<float> BatteryGuardClass::getSoCStopThreshold(void) const {
     return _oSoCStopThreshold;
 }
 
+/*
+ * Returns the requested or the recharge helper power limit, whichever is lower
+ */
+uint16_t BatteryGuardClass::calculatePowerLimitSmartBuffer(uint16_t const requestedPower) const {
+
+    if (!_useRechargeHelper) { return requestedPower; } // fast exit to avoid locking
+
+    std::shared_lock<std::shared_mutex> lock(_mutex);
+
+    auto backPower = requestedPower;
+    if (_oPowerLimit.has_value() && _useSmartBufferInverter) {
+        backPower = std::min(backPower, _oPowerLimit.value());
+    }
+    return backPower;
+}
 
 /*
  * Returns true if use of excessive solar power is allowed

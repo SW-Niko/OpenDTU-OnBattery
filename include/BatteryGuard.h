@@ -39,6 +39,7 @@ class BatteryGuardClass : public InterfaceProviderRT {
         void updateSettings(UpdateSource const source = UpdateSource::STARTUP);
         std::optional<bool> isStopThresholdReached(bool const inStateStop);
         uint16_t calculatePowerLimit(uint16_t const requestedPower, uint16_t const nowPower, uint32_t const nowMillis);
+        uint16_t calculatePowerLimitSmartBuffer(uint16_t const requestedPower) const;
         bool calculateRechargeHelper(void);
 
         // public getter methods with shared lock
@@ -186,6 +187,7 @@ class BatteryGuardClass : public InterfaceProviderRT {
         std::optional<float> _oSoCStopThreshold;            // shared data, battery SoC stop threshold, std::nullopt if not active
         bool _configError = false;                          // true if a configuration error was detected
         bool _lastTimeTrigger = false;                      // true if the trigger was already activated within the time window.
+        bool _useSmartBufferInverter = false;               // true if smart buffer inverter is used, false otherwise
 };
 
 extern BatteryGuardClass BatteryGuard;

@@ -443,7 +443,12 @@ void PowerLimiterClass::loop()
 
     auto coveredBySolar = updateInverterLimits(inverterTotalPower, sSolarPoweredFilter, sSolarPoweredExpression);
     auto remainingAfterSolar = (inverterTotalPower >= coveredBySolar) ? inverterTotalPower - coveredBySolar : 0;
-    auto coveredBySmartBuffer = updateInverterLimits(remainingAfterSolar, sSmartBufferPoweredFilter, sSmartBufferPoweredExpression);
+
+    // power limit from the 'Recharge Helper'
+    auto afterRechargeHelper = BatteryGuard.calculatePowerLimitSmartBuffer(remainingAfterSolar);
+    if (afterRechargeHelper < remainingAfterSolar) { DTU_LOGD("AC power limit by Recharge Helper is %u W", afterRechargeHelper); }
+
+    auto coveredBySmartBuffer = updateInverterLimits(afterRechargeHelper, sSmartBufferPoweredFilter, sSmartBufferPoweredExpression);
     auto remainingAfterSmartBuffer = (remainingAfterSolar >= coveredBySmartBuffer) ? remainingAfterSolar - coveredBySmartBuffer : 0;
     auto powerBusUsage = calcPowerBusUsage(remainingAfterSmartBuffer);
 
