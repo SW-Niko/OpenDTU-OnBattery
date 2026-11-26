@@ -40,6 +40,7 @@
  * 26.09.2025 - 0.5 - improvements "Recharge Helper" and use of shared_mutex to avoid data races
  * 27.10.2025 - 0.6 - "Recharge Helper" supports also SoC values
  * 02.02.2026 - 0.7 - improved logging and error handling, use startup epoch as a fallback for SoC full epoch
+ * 25.11.2026 - 0.8 - add "Recharge Helper" for smart batteries
  */
 
 #include <frozen/map.h>
@@ -1093,24 +1094,32 @@ bool BatteryGuardClass::calculateRechargeHelper(void) {
     auto const& config = Configuration.get();
 
     _configError = false;
-    if (config.PowerLimiter.IgnoreSoc && !config.BatteryGuard.UseVoltageThresholds) {
-        _configError = true; // invalid configuration, if DPL use voltage (ignores SoC) we also need voltage thresholds
-    } else {
-        if (config.BatteryGuard.UseVoltageThresholds) {
-            _configError = !thresholdsValid(
-                config.PowerLimiter.VoltageStartThreshold,
-                config.PowerLimiter.VoltageStopThreshold,
-                config.BatteryGuard.MaxVoltageStartThreshold,
-                config.BatteryGuard.MaxVoltageStopThreshold);
+    if (config.BatteryGuard.DurationStage1 > 0) {
+
+        // checking is only necessary if stage 1 is used (duration != 0)
+        if (config.PowerLimiter.IgnoreSoc && !config.BatteryGuard.UseVoltageThresholds) {
+            _configError = true; // invalid configuration, if DPL use voltage (ignores SoC) we also need voltage thresholds
         } else {
-            _configError = !thresholdsValid(
-                config.PowerLimiter.BatterySocStartThreshold,
-                config.PowerLimiter.BatterySocStopThreshold,
-                config.BatteryGuard.MaxSoCStartThreshold,
-                config.BatteryGuard.MaxSoCStopThreshold);
+            if (config.BatteryGuard.UseVoltageThresholds) {
+                _configError = !thresholdsValid(
+                    config.PowerLimiter.VoltageStartThreshold,
+                    config.PowerLimiter.VoltageStopThreshold,
+                    config.BatteryGuard.MaxVoltageStartThreshold,
+                    config.BatteryGuard.MaxVoltageStopThreshold);
+            } else {
+                _configError = !thresholdsValid(
+                    config.PowerLimiter.BatterySocStartThreshold,
+                    config.PowerLimiter.BatterySocStopThreshold,
+                    config.BatteryGuard.MaxSoCStartThreshold,
+                    config.BatteryGuard.MaxSoCStopThreshold);
+            }
         }
     }
-    if (config.BatteryGuard.UpperPowerLimit >= gUpperPowerLimitUsed()) { _configError = true; }
+    if (config.BatteryGuard.DurationStage2 > 0) {
+
+        // checking is only necessary if stage 2 is used (duration != 0)
+        if (config.BatteryGuard.UpperPowerLimit >= gUpperPowerLimitUsed()) { _configError = true; }
+    }
 
     auto oDay = gDaysSinceLastFullyCharged(fullEpoch, nowEpoch);
 
@@ -1151,58 +1160,64 @@ bool BatteryGuardClass::calculateRechargeHelper(void) {
     }
 
     // Stage 1: We increase the battery start/stop-thresholds every day
-    // and skip stage 1 if DurationStage1 is 0
+    // and skip stage 1 if duration = 0
     startDay += config.BatteryGuard.DurationIdle;
     stopDay += config.BatteryGuard.DurationStage1;
-    if ((day < stopDay) && (config.BatteryGuard.DurationStage1 > 0)) {
+    if (config.BatteryGuard.DurationStage1 > 0) {
+        if (day < stopDay) {
 
-        // calculate the battery start/stop thresholds based on the actual day
-        float dayFactor = static_cast<float>(day - startDay + 1) / static_cast<float>(config.BatteryGuard.DurationStage1);
-        if (config.BatteryGuard.UseVoltageThresholds) {
-            auto const& startMin = config.PowerLimiter.VoltageStartThreshold;
-            auto const& startMax = config.BatteryGuard.MaxVoltageStartThreshold;
-            _oVoltageStartThreshold = startMin + (startMax - startMin) * dayFactor;
-            auto const& stopMin = config.PowerLimiter.VoltageStopThreshold;
-            auto const& stopMax = config.BatteryGuard.MaxVoltageStopThreshold;
-            _oVoltageStopThreshold = stopMin + (stopMax - stopMin) * dayFactor;
-        } else {
-            auto const& startMin = config.PowerLimiter.BatterySocStartThreshold;
-            auto const& startMax = config.BatteryGuard.MaxSoCStartThreshold;
-            _oSoCStartThreshold = startMin + (startMax - startMin) * dayFactor;
-            auto const& stopMin = config.PowerLimiter.BatterySocStopThreshold;
-            auto const& stopMax = config.BatteryGuard.MaxSoCStopThreshold;
-            _oSoCStopThreshold = stopMin + (stopMax - stopMin) * dayFactor;
+            // calculate the battery start/stop thresholds based on the actual day
+            float dayFactor = static_cast<float>(day - startDay + 1) / static_cast<float>(config.BatteryGuard.DurationStage1);
+            if (config.BatteryGuard.UseVoltageThresholds) {
+                auto const& startMin = config.PowerLimiter.VoltageStartThreshold;
+                auto const& startMax = config.BatteryGuard.MaxVoltageStartThreshold;
+                _oVoltageStartThreshold = startMin + (startMax - startMin) * dayFactor;
+                auto const& stopMin = config.PowerLimiter.VoltageStopThreshold;
+                auto const& stopMax = config.BatteryGuard.MaxVoltageStopThreshold;
+                _oVoltageStopThreshold = stopMin + (stopMax - stopMin) * dayFactor;
+            } else {
+                auto const& startMin = config.PowerLimiter.BatterySocStartThreshold;
+                auto const& startMax = config.BatteryGuard.MaxSoCStartThreshold;
+                _oSoCStartThreshold = startMin + (startMax - startMin) * dayFactor;
+                auto const& stopMin = config.PowerLimiter.BatterySocStopThreshold;
+                auto const& stopMax = config.BatteryGuard.MaxSoCStopThreshold;
+                _oSoCStopThreshold = stopMin + (stopMax - stopMin) * dayFactor;
+            }
+            _hState = HState::STAGE1;
+            return true;
         }
-        _hState = HState::STAGE1;
-        return true;
-    }
 
-    // Stage 1 is over, we set the maximum thresholds
-    if (config.BatteryGuard.UseVoltageThresholds) {
-        _oVoltageStartThreshold = config.BatteryGuard.MaxVoltageStartThreshold;
-        _oVoltageStopThreshold = config.BatteryGuard.MaxVoltageStopThreshold;
-    } else {
-        _oSoCStartThreshold = config.BatteryGuard.MaxSoCStartThreshold;
-        _oSoCStopThreshold = config.BatteryGuard.MaxSoCStopThreshold;
+        // Stage 1 is over, we set the maximum thresholds
+        if (config.BatteryGuard.UseVoltageThresholds) {
+            _oVoltageStartThreshold = config.BatteryGuard.MaxVoltageStartThreshold;
+            _oVoltageStopThreshold = config.BatteryGuard.MaxVoltageStopThreshold;
+        } else {
+            _oSoCStartThreshold = config.BatteryGuard.MaxSoCStartThreshold;
+            _oSoCStopThreshold = config.BatteryGuard.MaxSoCStopThreshold;
+        }
     }
 
     // Stage 2: We reduce the upper power inverter limit every day
-    // and skip stage 2 if DurationStage2 is 0
+    // and skip stage 2 if duration = 0
     startDay += config.BatteryGuard.DurationStage1;
     stopDay += config.BatteryGuard.DurationStage2;
-    if ((day < stopDay) && (config.BatteryGuard.DurationStage2 > 0)) {
+    if (config.BatteryGuard.DurationStage2 > 0) {
+        if (day < stopDay) {
 
-        // calculate the upper power limit based on the actual day
-        float dayFactor = static_cast<float>(day - startDay + 1) / static_cast<float>(config.BatteryGuard.DurationStage2);
-        auto const& powerMin = config.BatteryGuard.UpperPowerLimit;
-        auto maxUpperPowerLimit = gUpperPowerLimitUsed();
-        _oPowerLimit = maxUpperPowerLimit - (maxUpperPowerLimit - powerMin) * dayFactor;
-        _hState = HState::STAGE2;
-        return true;
+            // calculate the upper power limit based on the actual day
+            float dayFactor = static_cast<float>(day - startDay + 1) / static_cast<float>(config.BatteryGuard.DurationStage2);
+            auto const& powerMin = config.BatteryGuard.UpperPowerLimit;
+            auto maxUpperPowerLimit = gUpperPowerLimitUsed();
+            _oPowerLimit = maxUpperPowerLimit - (maxUpperPowerLimit - powerMin) * dayFactor;
+            _hState = HState::STAGE2;
+            return true;
+        }
+
+        // Stage 2 is over, we use the minimum upper power limit
+        _oPowerLimit = config.BatteryGuard.UpperPowerLimit;
     }
 
     // Stage 3: we use the maximum start/stop-thresholds and the minimum upper power limit until the battery is full
-    _oPowerLimit = config.BatteryGuard.UpperPowerLimit;
     _hState = HState::STAGE3;
     return true;
 }
@@ -1351,24 +1366,32 @@ void BatteryGuardClass::printRechargeReport(void) const {
         DTU_LOGD("Configuration error: %s", _configError ? "Yes" : "No");
         DTU_LOGD("Using 100%% SoC time from battery");
         DTU_LOGD("Time since the start of the cycle: %i days", _dayCounter);
-        DTU_LOGD("Start day of state 'Increase Thresholds': %i", config.BatteryGuard.DurationIdle);
-        DTU_LOGD("Start day of state 'Decrease Power': %i", config.BatteryGuard.DurationIdle + config.BatteryGuard.DurationStage1);
+        if (config.BatteryGuard.DurationStage1 > 0) {
+            DTU_LOGD("Start day of state 'Increase Thresholds': %i", config.BatteryGuard.DurationIdle);
+        }
+        if (config.BatteryGuard.DurationStage2 > 0) {
+            DTU_LOGD("Start day of state 'Decrease Power': %i", config.BatteryGuard.DurationIdle + config.BatteryGuard.DurationStage1);
+        }
         DTU_LOGD("Start day of state 'Keep Limits': %i",
             config.BatteryGuard.DurationIdle + config.BatteryGuard.DurationStage1 + config.BatteryGuard.DurationStage2);
 
-        if (config.BatteryGuard.UseVoltageThresholds) {
-            DTU_LOGD("Voltage Start Threshold: %0.3fV [%0.2fV-%0.2fV]", _oVoltageStartThreshold.value_or(0.0f),
-                config.PowerLimiter.VoltageStartThreshold, config.BatteryGuard.MaxVoltageStartThreshold);
-            DTU_LOGD("Voltage Stop Threshold: %0.3fV [%0.2fV-%0.2fV]", _oVoltageStopThreshold.value_or(0.0f),
-                config.PowerLimiter.VoltageStopThreshold, config.BatteryGuard.MaxVoltageStopThreshold);
-        } else {
-            DTU_LOGD("SoC Start Threshold: %0.2f%% [%i%%-%i%%]", _oSoCStartThreshold.value_or(0.0f),
-                config.PowerLimiter.BatterySocStartThreshold, config.BatteryGuard.MaxSoCStartThreshold);
-            DTU_LOGD("SoC Stop Threshold: %0.2f%% [%i%%-%i%%]", _oSoCStopThreshold.value_or(0.0f),
-                config.PowerLimiter.BatterySocStopThreshold, config.BatteryGuard.MaxSoCStopThreshold);
+        if (config.BatteryGuard.DurationStage1 > 0) {
+            if (config.BatteryGuard.UseVoltageThresholds) {
+                DTU_LOGD("Voltage Start Threshold: %0.3fV [%0.2fV-%0.2fV]", _oVoltageStartThreshold.value_or(0.0f),
+                    config.PowerLimiter.VoltageStartThreshold, config.BatteryGuard.MaxVoltageStartThreshold);
+                DTU_LOGD("Voltage Stop Threshold: %0.3fV [%0.2fV-%0.2fV]", _oVoltageStopThreshold.value_or(0.0f),
+                    config.PowerLimiter.VoltageStopThreshold, config.BatteryGuard.MaxVoltageStopThreshold);
+            } else {
+                DTU_LOGD("SoC Start Threshold: %0.2f%% [%i%%-%i%%]", _oSoCStartThreshold.value_or(0.0f),
+                    config.PowerLimiter.BatterySocStartThreshold, config.BatteryGuard.MaxSoCStartThreshold);
+                DTU_LOGD("SoC Stop Threshold: %0.2f%% [%i%%-%i%%]", _oSoCStopThreshold.value_or(0.0f),
+                    config.PowerLimiter.BatterySocStopThreshold, config.BatteryGuard.MaxSoCStopThreshold);
+            }
         }
 
-        DTU_LOGD("Power Limit: %iW [%iW-%iW]", _oPowerLimit.value_or(0), gUpperPowerLimitUsed(), config.BatteryGuard.UpperPowerLimit);
+        if (config.BatteryGuard.DurationStage2 > 0) {
+            DTU_LOGD("Power Limit: %iW [%iW-%iW]", _oPowerLimit.value_or(0), gUpperPowerLimitUsed(), config.BatteryGuard.UpperPowerLimit);
+        }
         DTU_LOGD("DPL Use Voltage Thresholds Only: %s", config.BatteryGuard.UseVoltageThresholds ? "Yes" : "No");
     }
 }
