@@ -132,17 +132,19 @@
                             wide
                         />
 
-                        <InputElement
-                            :label="$t('batteryguardadmin.RechargeHelperUseVoltage')"
-                            v-model="batteryGuardConfig.use_voltage_thresholds"
-                            type="checkbox"
-                            :tooltip="$t('batteryguardadmin.RechargeHelperUseVoltageHint')"
-                            wide
-                            :disabled="
-                                batteryGuardConfig.voltage_drop_compensation_enabled &&
-                                batteryGuardConfig.low_voltage_limiter_enabled
-                            "
-                        />
+                        <template v-if="batteryGuardConfig.duration_stage1 > 0">
+                            <InputElement
+                                :label="$t('batteryguardadmin.RechargeHelperUseVoltage')"
+                                v-model="batteryGuardConfig.use_voltage_thresholds"
+                                type="checkbox"
+                                :tooltip="$t('batteryguardadmin.RechargeHelperUseVoltageHint')"
+                                wide
+                                :disabled="
+                                    batteryGuardConfig.voltage_drop_compensation_enabled &&
+                                    batteryGuardConfig.low_voltage_limiter_enabled
+                                "
+                            />
+                        </template>
 
                         <InputElement
                             :label="$t('batteryguardadmin.RechargeIdle')"
@@ -180,69 +182,73 @@
                             wide
                         />
 
-                        <template v-if="batteryGuardConfig.use_voltage_thresholds">
-                            <InputElement
-                                :label="$t('batteryguardadmin.RechargeMaxStartThreshold')"
-                                v-model="batteryGuardConfig.max_start_threshold"
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="0.1"
-                                postfix="V"
-                                :tooltip="$t('batteryguardadmin.RechargeMaxStartHint')"
-                                wide
-                            />
+                        <template v-if="batteryGuardConfig.duration_stage1 > 0">
+                            <template v-if="batteryGuardConfig.use_voltage_thresholds">
+                                <InputElement
+                                    :label="$t('batteryguardadmin.RechargeMaxStartThreshold')"
+                                    v-model="batteryGuardConfig.max_start_threshold"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                    postfix="V"
+                                    :tooltip="$t('batteryguardadmin.RechargeMaxStartHint')"
+                                    wide
+                                />
 
+                                <InputElement
+                                    :label="$t('batteryguardadmin.RechargeMaxStopThreshold')"
+                                    v-model="batteryGuardConfig.max_stop_threshold"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                    postfix="V"
+                                    :tooltip="$t('batteryguardadmin.RechargeMaxStopHint')"
+                                    wide
+                                />
+                            </template>
+
+                            <template v-else>
+                                <InputElement
+                                    :label="$t('batteryguardadmin.RechargeMaxStartThreshold')"
+                                    v-model="batteryGuardConfig.max_soc_start_threshold"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="1"
+                                    postfix="%"
+                                    :tooltip="$t('batteryguardadmin.RechargeMaxStartHint')"
+                                    wide
+                                />
+
+                                <InputElement
+                                    :label="$t('batteryguardadmin.RechargeMaxStopThreshold')"
+                                    v-model="batteryGuardConfig.max_soc_stop_threshold"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="1"
+                                    postfix="%"
+                                    :tooltip="$t('batteryguardadmin.RechargeMaxStopHint')"
+                                    wide
+                                />
+                            </template>
+                        </template>
+
+                        <template v-if="batteryGuardConfig.duration_stage2 > 0">
                             <InputElement
-                                :label="$t('batteryguardadmin.RechargeMaxStopThreshold')"
-                                v-model="batteryGuardConfig.max_stop_threshold"
+                                :label="$t('batteryguardadmin.RechargePowerLimit')"
+                                v-model="batteryGuardConfig.upper_power_limit"
                                 type="number"
                                 min="0"
-                                max="100"
-                                step="0.1"
-                                postfix="V"
-                                :tooltip="$t('batteryguardadmin.RechargeMaxStopHint')"
+                                max="2000"
+                                step="1"
+                                postfix="W"
+                                :tooltip="$t('batteryguardadmin.RechargePowerLimitHint')"
                                 wide
                             />
                         </template>
-
-                        <template v-else>
-                            <InputElement
-                                :label="$t('batteryguardadmin.RechargeMaxStartThreshold')"
-                                v-model="batteryGuardConfig.max_soc_start_threshold"
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="1"
-                                postfix="%"
-                                :tooltip="$t('batteryguardadmin.RechargeMaxStartHint')"
-                                wide
-                            />
-
-                            <InputElement
-                                :label="$t('batteryguardadmin.RechargeMaxStopThreshold')"
-                                v-model="batteryGuardConfig.max_soc_stop_threshold"
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="1"
-                                postfix="%"
-                                :tooltip="$t('batteryguardadmin.RechargeMaxStopHint')"
-                                wide
-                            />
-                        </template>
-
-                        <InputElement
-                            :label="$t('batteryguardadmin.RechargePowerLimit')"
-                            v-model="batteryGuardConfig.upper_power_limit"
-                            type="number"
-                            min="0"
-                            max="2000"
-                            step="1"
-                            postfix="W"
-                            :tooltip="$t('batteryguardadmin.RechargePowerLimitHint')"
-                            wide
-                        />
                     </template>
 
                     <div
